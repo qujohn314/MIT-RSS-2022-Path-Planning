@@ -18,7 +18,7 @@ class PurePursuit(object):
     def __init__(self):
         # self.odom_topic = rospy.get_param("~odom_topic")  # TODO: This is throwing an error for some reason
         self.odom_topic = "/odom"
-        self.lookahead = 1  # TODO: Refine this number
+        self.lookahead = 1  # TODO: Refine this number; change with trajectory to optimize as well
         self.speed = 1  # TODO: Any changes needed? Do we need to get speed as parameter?
         # self.wrap  = # TODO: what is this?
         self.wheelbase_length = 0.55
@@ -70,7 +70,7 @@ class PurePursuit(object):
         point[1] = point[1] - self.car_point[1]
         return point
 
-    def pure_pursuit(self, theta): # not sure what the arguments should be yet
+    def pure_pursuit(self, theta):  # not sure what the arguments should be yet
         if np.size(self.trajectory_points) < 3:
             pass
         car_x = self.car_point[0]
