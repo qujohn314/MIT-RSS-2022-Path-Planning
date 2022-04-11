@@ -32,12 +32,11 @@ class PathPlan(object):
 
     def map_cb(self, msg):
         self.create_rot_matrix
-        data = msg.data.reshape((msg.info.height, msg.info.width))
-        pixel_grid = np.zeros((int(msg.info.height/float(msg.info.resolution)), int(msg.info.width/float(msg.info.resolution))))
-        for u in range(len(pixel_grid)):
-            for v in range(len(pixel_grid[u])):
-                x, y = self.convert_uv_to_xy(msg, u, v)
-                pixel_grid[v, u] = data[y, x]
+        data = np.reshape(msg.data(msg.info.height, msg.info.width))
+        pixel_grid = np.zeros((int(msg.info.height), int(msg.info.width)))
+        for v in range(len(pixel_grid)):
+            for u in range(len(pixel_grid[u])):
+                pixel_grid[v, u] = data[v, u]
         self.grid = pixel_grid
         self.map_acquired = True
         # pass ## REMOVE AND FILL IN ##
@@ -68,29 +67,29 @@ class PathPlan(object):
         self.translation = np.array([msg.info.origin.position.x, msg.info.origin.position.y, msg.info.origin.position.z])
 
     def convert_xy_to_uv(self, msg, x, y):
-        # Divide (x,y) by map resolution
-        scaled_x = float(x)/msg.info.resolution
-        scaled_y = float(y)/msg.info.resolution
-        # Get new set of (x,y coordinates)
-        coordinates = np.array([scaled_x, scaled_y, 1])
-        # First apply the rotation (rotation @ coordinates)
-        rotated = np.matmul(self.rot_matrix, coordinates.T)
-        # Then apply the translation 
-        shifted = rotated + self.translation
-        # Only return the (u,v) point because last point is unnecessary
-        return shifted[:2]
+        coordinates = np.array([x,y,0])
+        #Apply translation
+        shifted = rotated - self.translation
+        #Undo rotation
+        rotated = np.matmul(self.rot_matrix.T, coordinates.T).T #inverse rotation
 
-    def convert_uv_to_xy(self, msg, x, y):
-        # Divide (x,y) by map resolution
-        scaled_x = x * msg.info.resolution
-        scaled_y = y * msg.info.resolution
-        # Get new set of (x,y coordinates)
-        coordinates = np.array([scaled_x, scaled_y, 1])
-        # First apply the rotation (rotation @ coordinates)
-        rotated = np.matmul(self.rot_matrix, coordinates.T)
+        #convert to pixel coords
+        u = float(rotated[0])/msg.info.resolution
+        v = float(rotated[1])/msg.info.resolution
+
+        return np.array([u,v])
+
+    def convert_uv_to_xy(self, msg, u, v):
+        # Multiply (u,v) by map resolution
+        scaled_u = u * msg.info.resolution
+        scaled_v = v * msg.info.resolution
+        # Get new set of (u,v coordinates)
+        coordinates = np.array([scaled_u, scaled_v, 0])
+        # First apply the rotation (rotation @ coordinates) 
+        rotated = np.matmul(self.rot_matrix, coordinates.T).T #3x3 * 3x1
         # Then apply the translation 
         shifted = rotated + self.translation
-        # Only return the (u,v) point because last point is unnecessary
+        # Only return the (x,y) point because last point is unnecessary
         return shifted[:2]
 
     def odom_cb(self, msg):
@@ -111,78 +110,63 @@ class PathPlan(object):
         # theta = msg.twist.twist.angular.z
         self.goal = np.array([x,y])
 
+    def heuristic(self, a, b):
+        return (b[0]-a[0])**2 + (b[1]-a[1])**2
+
+    def generate_neighbors(self, node):
+        north = np.array([0,1])
+        east = np.array([1,0])
+        south = np.array([0,-1])
+        west = np.array([-1,0])
+        return [node+north, node+east, node+south, node+west]
+
     def plan_path(self, start_point, end_point, map):
         ## CODE FOR PATH PLANNING ##
         if not self.start or not self.end:
             return
-        # Create start and end node
-        start_node = Node(None, start_point)
-        start_node.g = start_node.h = start_node.f = 0
-        end_node = Node(None, end_point)
-        end_node.g = end_node.h = end_node.f = 0
-
-        # Initialize both open and closed list
+        found_goal = False
         open_list = PriorityQueue()
-        closed_list = []
+        closed_list = set()
+        came_from = {}
+        cost_so_far = {}
+        came_from[start_point] = None
+        cost_so_far[start_point] = 0
+        # Create start and end node
 
-        # Add the start node
-        open_list.put((start_node.f, start_node))
+        open_list.put((0, start_point))
 
         # Loop until you find the end
-        while open_list.qsize() > 0:
-            current_cost, current_node = open_list.get()
-            closed_list.append(current_node)
-
-            # Found the goal
-            if current_node == end_node:
-                path = []
-                current = current_node
-                while current is not None:
-                    path.append(current.position)
-                    current = current.parent
-                return path[::-1] # Return reversed path
-
-            # Generate children
-            children = []
-            for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)]: # Adjacent squares
-
-                # Get node position
-                node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
-
-                # Make sure within range
-                if node_position[0] > (len(map) - 1) or node_position[0] < 0 or node_position[1] > (len(map[len(map)-1]) -1) or node_position[1] < 0:
+        while not open_list.empty():
+            current = open_list.get()[1]
+            
+            if (current==end_point).all():
+                found_goal = True
+                break
+            
+            neighbors = self.generate_neighbors(current)
+            for neighbor in neighbors: # Adjacent squares
+                if map[neighbor[0]][neighbor[1]] != 0:
                     continue
-
-                # Make sure walkable terrain
-                if map[node_position[0]][node_position[1]] != 0:
+                if neighbor[0] > (len(map) - 1) or neighbor[0] < 0 or neighbor[1] > (len(map[0])-1) or neighbor[1] < 0:
                     continue
+                
+                new_cost = cost_so_far[current] + 1
+                
+                if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
+                    cost_so_far[neighbor] = new_cost
+                    priority = new_cost + self.heuristic(neighbor, end_point)
+                    open_list.put(priority, neighbor)
+                    came_from[neighbor] = current
+            
 
-                # Create new node
-                new_node = Node(current_node, node_position)
-
-                # Append
-                children.append(new_node)
-
-            # Loop through children
-            for child in children:
-
-                # Child is on the closed list
-                for closed_child in closed_list:
-                    if child == closed_child:
-                        continue
-
-                # Create the f, g, and h values
-                child.g = current_node.g + 1
-                child.h = ((child.position[0] - end_node.position[0]) ** 2) + ((child.position[1] - end_node.position[1]) ** 2)
-                child.f = child.g + child.h
-
-                # Child is already in the open list
-                for open_node in open_list[1]:
-                    if child == open_node and child.g > open_node.g:
-                        continue
-
-                # Add the child to the open list
-                open_list.put((child.f, child))
+        # Found the goal
+        if found_goal:
+            current = end_point
+            path = [current]
+            while current is not None:
+                path.append(came_from[current])
+                current = came_from[current]
+            return path[::-1] # Return reversed path
 
         # convert the path to a trajectory
         trajectory = [] #initialize series of piecewise points
