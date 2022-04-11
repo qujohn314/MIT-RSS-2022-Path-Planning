@@ -127,7 +127,7 @@ class PathPlan(object):
             return
         found_goal = False
         open_list = PriorityQueue()
-        closed_list = set()
+        final_path = []
         came_from = {}
         cost_so_far = {}
         came_from[start_point] = None
@@ -167,13 +167,13 @@ class PathPlan(object):
             while current is not None:
                 path.append(came_from[current])
                 current = came_from[current]
-            return path[::-1] # Return reversed path
+            final_path = path[::-1] # Return reversed path
 
         # convert the path to a trajectory
         trajectory = [] #initialize series of piecewise points
-        for i in range(len(path)-1):
-            current_node = path[i]
-            next_node = path[i+1]
+        for i in range(len(final_path)-1):
+            current_node = final_path[i]
+            next_node = final_path[i+1]
 
             delta_x = next_node.position[0] - current_node.position[0]
             delta_y = next_node.position[1] - current_node.position[1]
@@ -191,21 +191,6 @@ class PathPlan(object):
 
         # visualize trajectory Markers
         self.trajectory.publish_viz()
-
-class Node():
-    """A node class for A* Pathfinding"""
-
-    def __init__(self, parent=None, position=None):
-        self.parent = parent
-        self.position = position
-
-        self.g = 0
-        self.h = 0
-        self.f = 0
-
-    def __eq__(self, other):
-        return self.position == other.position
-
 
 if __name__=="__main__":
     rospy.init_node("path_planning")
