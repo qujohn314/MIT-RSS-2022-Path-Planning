@@ -110,78 +110,63 @@ class PathPlan(object):
         # theta = msg.twist.twist.angular.z
         self.goal = np.array([x,y])
 
+    def heuristic(self, a, b):
+        return (b[0]-a[0])**2 + (b[1]-a[1])**2
+
+    def generate_neighbors(self, node):
+        north = np.array([0,1])
+        east = np.array([1,0])
+        south = np.array([0,-1])
+        west = np.array([-1,0])
+        return [node+north, node+east, node+south, node+west]
+
     def plan_path(self, start_point, end_point, map):
         ## CODE FOR PATH PLANNING ##
         if not self.start or not self.end:
             return
-        # Create start and end node
-        start_node = Node(None, start_point)
-        start_node.g = start_node.h = start_node.f = 0
-        end_node = Node(None, end_point)
-        end_node.g = end_node.h = end_node.f = 0
-
-        # Initialize both open and closed list
+        found_goal = False
         open_list = PriorityQueue()
-        closed_list = []
+        closed_list = set()
+        came_from = {}
+        cost_so_far = {}
+        came_from[start_point] = None
+        cost_so_far[start_point] = 0
+        # Create start and end node
 
-        # Add the start node
-        open_list.put((start_node.f, start_node))
+        open_list.put((0, start_point))
 
         # Loop until you find the end
-        while open_list.qsize() > 0:
-            current_cost, current_node = open_list.get()
-            closed_list.append(current_node)
-
-            # Found the goal
-            if current_node == end_node:
-                path = []
-                current = current_node
-                while current is not None:
-                    path.append(current.position)
-                    current = current.parent
-                return path[::-1] # Return reversed path
-
-            # Generate children
-            children = []
-            for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)]: # Adjacent squares
-
-                # Get node position
-                node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
-
-                # Make sure within range
-                if node_position[0] > (len(map) - 1) or node_position[0] < 0 or node_position[1] > (len(map[len(map)-1]) -1) or node_position[1] < 0:
+        while not open_list.empty():
+            current = open_list.get()[1]
+            
+            if (current==end_point).all():
+                found_goal = True
+                break
+            
+            neighbors = self.generate_neighbors(current)
+            for neighbor in neighbors: # Adjacent squares
+                if map[neighbor[0]][neighbor[1]] != 0:
                     continue
-
-                # Make sure walkable terrain
-                if map[node_position[0]][node_position[1]] != 0:
+                if neighbor[0] > (len(map) - 1) or neighbor[0] < 0 or neighbor[1] > (len(map[0])-1) or neighbor[1] < 0:
                     continue
+                
+                new_cost = cost_so_far[current] + 1
+                
+                if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
+                    cost_so_far[neighbor] = new_cost
+                    priority = new_cost + self.heuristic(neighbor, end_point)
+                    open_list.put(priority, neighbor)
+                    came_from[neighbor] = current
+            
 
-                # Create new node
-                new_node = Node(current_node, node_position)
-
-                # Append
-                children.append(new_node)
-
-            # Loop through children
-            for child in children:
-
-                # Child is on the closed list
-                for closed_child in closed_list:
-                    if child == closed_child:
-                        continue
-
-                # Create the f, g, and h values
-                child.g = current_node.g + 1
-                child.h = ((child.position[0] - end_node.position[0]) ** 2) + ((child.position[1] - end_node.position[1]) ** 2)
-                child.f = child.g + child.h
-
-                # Child is already in the open list
-                for open_node in open_list[1]:
-                    if child == open_node and child.g > open_node.g:
-                        continue
-
-                # Add the child to the open list
-                open_list.put((child.f, child))
+        # Found the goal
+        if found_goal:
+            current = end_point
+            path = [current]
+            while current is not None:
+                path.append(came_from[current])
+                current = came_from[current]
+            return path[::-1] # Return reversed path
 
         # convert the path to a trajectory
         trajectory = [] #initialize series of piecewise points
