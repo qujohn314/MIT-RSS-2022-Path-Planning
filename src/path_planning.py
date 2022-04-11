@@ -32,12 +32,11 @@ class PathPlan(object):
 
     def map_cb(self, msg):
         self.create_rot_matrix
-        data = msg.data.reshape((msg.info.height, msg.info.width))
-        pixel_grid = np.zeros((int(msg.info.height/float(msg.info.resolution)), int(msg.info.width/float(msg.info.resolution))))
-        for u in range(len(pixel_grid)):
-            for v in range(len(pixel_grid[u])):
-                x, y = self.convert_uv_to_xy(msg, u, v)
-                pixel_grid[v, u] = data[y, x]
+        data = np.reshape(msg.data(msg.info.height, msg.info.width))
+        pixel_grid = np.zeros((int(msg.info.height), int(msg.info.width)))
+        for v in range(len(pixel_grid)):
+            for u in range(len(pixel_grid[u])):
+                pixel_grid[v, u] = data[v, u]
         self.grid = pixel_grid
         self.map_acquired = True
         # pass ## REMOVE AND FILL IN ##
@@ -68,29 +67,29 @@ class PathPlan(object):
         self.translation = np.array([msg.info.origin.position.x, msg.info.origin.position.y, msg.info.origin.position.z])
 
     def convert_xy_to_uv(self, msg, x, y):
-        # Divide (x,y) by map resolution
-        scaled_x = float(x)/msg.info.resolution
-        scaled_y = float(y)/msg.info.resolution
-        # Get new set of (x,y coordinates)
-        coordinates = np.array([scaled_x, scaled_y, 1])
-        # First apply the rotation (rotation @ coordinates)
-        rotated = np.matmul(self.rot_matrix, coordinates.T)
-        # Then apply the translation 
-        shifted = rotated + self.translation
-        # Only return the (u,v) point because last point is unnecessary
-        return shifted[:2]
+        coordinates = np.array([x,y,0])
+        #Apply translation
+        shifted = rotated - self.translation
+        #Undo rotation
+        rotated = np.matmul(self.rot_matrix.T, coordinates.T).T #inverse rotation
 
-    def convert_uv_to_xy(self, msg, x, y):
-        # Divide (x,y) by map resolution
-        scaled_x = x * msg.info.resolution
-        scaled_y = y * msg.info.resolution
-        # Get new set of (x,y coordinates)
-        coordinates = np.array([scaled_x, scaled_y, 1])
-        # First apply the rotation (rotation @ coordinates)
-        rotated = np.matmul(self.rot_matrix, coordinates.T)
+        #convert to pixel coords
+        u = float(rotated[0])/msg.info.resolution
+        v = float(rotated[1])/msg.info.resolution
+
+        return np.array([u,v])
+
+    def convert_uv_to_xy(self, msg, u, v):
+        # Multiply (u,v) by map resolution
+        scaled_u = u * msg.info.resolution
+        scaled_v = v * msg.info.resolution
+        # Get new set of (u,v coordinates)
+        coordinates = np.array([scaled_u, scaled_v, 0])
+        # First apply the rotation (rotation @ coordinates) 
+        rotated = np.matmul(self.rot_matrix, coordinates.T).T #3x3 * 3x1
         # Then apply the translation 
         shifted = rotated + self.translation
-        # Only return the (u,v) point because last point is unnecessary
+        # Only return the (x,y) point because last point is unnecessary
         return shifted[:2]
 
     def odom_cb(self, msg):

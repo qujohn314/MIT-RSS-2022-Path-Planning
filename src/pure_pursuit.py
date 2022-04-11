@@ -46,6 +46,8 @@ class PurePursuit(object):
         quat = msg.pose.pose.orientation
         orientation = tf.transformations.euler_from_quaternion(np.array([quat.x, quat.y, quat.z, quat.w]))
         theta = orientation[2]
+
+        self.car_theta = theta
         self.car_point = (x, y)
         self.pure_pursuit(theta)
 
@@ -77,19 +79,27 @@ class PurePursuit(object):
         dist = lambda p: np.sqrt((car_x - p[0])**2 + (car_y - p[1])**2)
         angle = lambda p: np.arctan2(p[1], p[0])
 
+
         # find the differences between the x and y values of current location and points
         points_diff = np.apply_along_axis(self.diff, 0, self.trajectory.points)
-        
+        points_dist = np.apply_along_axis(dist, 1, points_diff)
+        rospy.loginfo("POINTS DIFF ----------------------------")
+        rospy.loginfo(points_diff)
+
         # find relative angle of car to all points
-        # rospy.loginfo()
-        angles = np.apply_along_axis(angle, 0, points_diff)
+        rospy.loginfo("CAR THETA -----------------------")
+        rospy.loginfo(self.car_theta)
+        angles = np.apply_along_axis(angle, 1, points_diff) - self.car_theta
+        rospy.loginfo("ANGLES ----------------------------")
+        rospy.loginfo(angles)
+
         
         # pick out points that are in front of us (-90 < angle < 90 degrees)
-        front_trajectory_points = np.any(abs(angles) < np.pi/2)
-        angles_idx = np.where(angles == front_trajectory_points)
-        rospy.loginfo("ANGLES IDX ----------------------------")
-        rospy.loginfo(angles_idx)
-        front_points = self.trajectory.points[angles_idx]
+        front_trajectory_points = np.array(np.where(np.abs(angles) < np.pi/2.0)[0], dtype = np.int)
+        rospy.loginfo("FRONT TRAJ IDX ----------------------------")
+        rospy.loginfo(front_trajectory_points)
+
+        front_points = self.trajectory.points[front_trajectory_points]
 
         # find closest point in front of the car
         point_distances = np.apply_along_axis(dist, 0, front_points)
