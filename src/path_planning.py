@@ -16,9 +16,11 @@ class PathPlan(object):
     """
     def __init__(self):
         self.map_acquired = False
+        self.rot_matrix = None
+        self.translation = None
         self.start = None
         self.end = None
-        self.obstacles = []
+        self.grid = None
 
         self.odom_topic = rospy.get_param("~odom_topic")
         self.map_sub = rospy.Subscriber("/map", OccupancyGrid, self.map_cb)
@@ -29,24 +31,24 @@ class PathPlan(object):
 
 
     def map_cb(self, msg):
-        data = msg.data
-        grid = data.reshape((msg.info.height, msg.info.width))
-        for x in range(len(grid)):
-            for y in range(len(grid[x])):
-                if grid[y][x] != 0: # this number is randomly chosen
-                    self.obstacles.append(self.convert_xy_to_uv(msg, x, y))
+        self.create_rot_matrix
+        data = msg.data.reshape((msg.info.height, msg.info.width))
+        pixel_grid = np.zeros((int(msg.info.height/float(msg.info.resolution)), int(msg.info.width/float(msg.info.resolution))))
+        for u in range(len(pixel_grid)):
+            for v in range(len(pixel_grid[u])):
+                x, y = self.convert_uv_to_xy(msg, u, v)
+                pixel_grid[v, u] = data[y, x]
+        self.grid = pixel_grid
         self.map_acquired = True
-        pass ## REMOVE AND FILL IN ##
+        # pass ## REMOVE AND FILL IN ##
 
-    def convert_xy_to_uv(self, msg, x, y):
-        scaled_x = float(x)/msg.info.resolution
-        scaled_y = float(y)/msg.info.resolution
-        coordinates = np.array([scaled_x, scaled_y, 1])
+    def create_rot_matrix(self, msg):
         Q = msg.info.origin.orientation
         q0 = Q.x
         q1 = Q.y
         q2 = Q.z
         q3 = Q.w
+        # First row of the rotation matrix
         r00 = 2 * (q0*q0 + q1*q1) - 1
         r01 = 2 * (q1*q2 - q0*q3)
         r02 = 2 * (q1*q3 + q0*q2)
@@ -60,13 +62,36 @@ class PathPlan(object):
         r22 = 2 * (q0*q0 + q3*q3) - 1
         
         # 3x3 rotation matrix
-        rot_matrix = np.array([[r00, r01, r02],
-                            [r10, r11, r12],
-                            [r20, r21, r22]])
-                            
-        rotated = np.matmul(rot_matrix, coordinates.T)
-        translation = np.array([msg.info.origin.position.x, msg.info.origin.position.y, msg.info.origin.position.z])
-        return rotated + translation.T
+        self.rot_matrix = np.array([[r00, r01, r02],
+                                    [r10, r11, r12],
+                                    [r20, r21, r22]])
+        self.translation = np.array([msg.info.origin.position.x, msg.info.origin.position.y, msg.info.origin.position.z])
+
+    def convert_xy_to_uv(self, msg, x, y):
+        # Divide (x,y) by map resolution
+        scaled_x = float(x)/msg.info.resolution
+        scaled_y = float(y)/msg.info.resolution
+        # Get new set of (x,y coordinates)
+        coordinates = np.array([scaled_x, scaled_y, 1])
+        # First apply the rotation (rotation @ coordinates)
+        rotated = np.matmul(self.rot_matrix, coordinates.T)
+        # Then apply the translation 
+        shifted = rotated + self.translation
+        # Only return the (u,v) point because last point is unnecessary
+        return shifted[:2]
+
+    def convert_uv_to_xy(self, msg, x, y):
+        # Divide (x,y) by map resolution
+        scaled_x = x * msg.info.resolution
+        scaled_y = y * msg.info.resolution
+        # Get new set of (x,y coordinates)
+        coordinates = np.array([scaled_x, scaled_y, 1])
+        # First apply the rotation (rotation @ coordinates)
+        rotated = np.matmul(self.rot_matrix, coordinates.T)
+        # Then apply the translation 
+        shifted = rotated + self.translation
+        # Only return the (u,v) point because last point is unnecessary
+        return shifted[:2]
 
     def odom_cb(self, msg):
         # pass ## REMOVE AND FILL IN ##
@@ -74,40 +99,38 @@ class PathPlan(object):
             return
         x = msg.twist.twist.linear.x
         y = msg.twist.twist.linear.y
-        theta = msg.twist.twist.angular.z
-        self.start = [x,y,theta]
+        # theta = msg.twist.twist.angular.z
+        self.start = np.array([x,y])
 
     def goal_cb(self, msg):
-        pass ## REMOVE AND FILL IN ##
+        # pass ## REMOVE AND FILL IN ##
+        if not self.map_acquired:
+            return
+        x = msg.twist.twist.linear.x
+        y = msg.twist.twist.linear.y
+        # theta = msg.twist.twist.angular.z
+        self.goal = np.array([x,y])
 
     def plan_path(self, start_point, end_point, map):
         ## CODE FOR PATH PLANNING ##
+        if not self.start or not self.end:
+            return
         # Create start and end node
         start_node = Node(None, start_point)
-        start_point.g = start_node.h = start_node.f = 0
+        start_node.g = start_node.h = start_node.f = 0
         end_node = Node(None, end_point)
         end_node.g = end_node.h = end_node.f = 0
 
         # Initialize both open and closed list
-        open_list = []
+        open_list = PriorityQueue()
         closed_list = []
 
         # Add the start node
-        open_list.append(start_node)
+        open_list.put((start_node.f, start_node))
 
         # Loop until you find the end
-        while len(open_list) > 0:
-
-            # Get the current node
-            current_node = open_list[0]
-            current_index = 0
-            for index, item in enumerate(open_list):
-                if item.f < current_node.f:
-                    current_node = item
-                    current_index = index
-
-            # Pop current off open list, add to closed list
-            open_list.pop(current_index)
+        while open_list.qsize() > 0:
+            current_cost, current_node = open_list.get()
             closed_list.append(current_node)
 
             # Found the goal
@@ -154,12 +177,12 @@ class PathPlan(object):
                 child.f = child.g + child.h
 
                 # Child is already in the open list
-                for open_node in open_list:
+                for open_node in open_list[1]:
                     if child == open_node and child.g > open_node.g:
                         continue
 
                 # Add the child to the open list
-                open_list.append(child)
+                open_list.put((child.f, child))
 
         # convert the path to a trajectory
         trajectory = [] #initialize series of piecewise points
