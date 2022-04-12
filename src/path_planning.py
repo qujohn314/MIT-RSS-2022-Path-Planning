@@ -115,10 +115,14 @@ class PathPlan(object):
 
     def generate_neighbors(self, node):
         north = np.array([0,1])
+        northeast = np.array([1,1])
         east = np.array([1,0])
+        southeast = np.array([1,-1])
         south = np.array([0,-1])
+        southwest = np.array([-1,-1])
         west = np.array([-1,0])
-        return [node+north, node+east, node+south, node+west]
+        northwest = np.array([-1,1])
+        return [node+north, node+northeast, node+east, node+southeast, node+south, node+southwest, node+west, node+northwest]
 
     def plan_path(self, start_point, end_point, map):
         ## CODE FOR PATH PLANNING ##
@@ -145,13 +149,17 @@ class PathPlan(object):
             
             neighbors = self.generate_neighbors(current)
             for neighbor in neighbors: # Adjacent squares
+                # obstacle in the way
                 if map[neighbor[0]][neighbor[1]] != 0:
                     continue
+                # out of bounds
                 if neighbor[0] > (len(map) - 1) or neighbor[0] < 0 or neighbor[1] > (len(map[0])-1) or neighbor[1] < 0:
                     continue
                 
+                # Increase the cost by one
                 new_cost = cost_so_far[current] + 1
                 
+
                 if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
                     cost_so_far[neighbor] = new_cost
                     priority = new_cost + self.heuristic(neighbor, end_point)
