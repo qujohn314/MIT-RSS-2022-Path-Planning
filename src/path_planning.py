@@ -3,12 +3,16 @@
 import rospy
 import numpy as np
 import math
-from geometry_msgs.msg import PoseStamped, PoseArray
+from geometry_msgs.msg import PoseStamped, PoseArray, Pose, Quaternion
 from nav_msgs.msg import Odometry, OccupancyGrid
 import rospkg
 import time, os
 from utils import LineTrajectory
 from queue import PriorityQueue
+
+from tf.transformations import quaternion_from_matrix
+import tf.transformations
+from scipy.spatial.transform import Rotation as R
 
 class PathPlan(object):
     """ Listens for goal pose published by RViz and uses it to plan a path from
@@ -39,6 +43,7 @@ class PathPlan(object):
                 pixel_grid[v, u] = data[v, u]
         self.grid = pixel_grid
         self.map_acquired = True
+        self.map_msg = msg
         # pass ## REMOVE AND FILL IN ##
 
     def create_rot_matrix(self, msg):
@@ -91,6 +96,10 @@ class PathPlan(object):
         shifted = rotated + self.translation
         # Only return the (x,y) point because last point is unnecessary
         return shifted[:2]
+    
+    def euler_to_quat(self, euler,deg=False):
+        r = R.from_euler('xyz', euler,degrees=deg)
+        return r.as_quat()
 
     def odom_cb(self, msg):
         # pass ## REMOVE AND FILL IN ##
@@ -178,23 +187,43 @@ class PathPlan(object):
 
         # convert the path to a trajectory
         trajectory = [] #initialize series of piecewise points
+        poseArray = PoseArray()
         for i in range(len(final_path)-1):
             current_node = final_path[i]
             next_node = final_path[i+1]
 
-            delta_x = next_node.position[0] - current_node.position[0]
-            delta_y = next_node.position[1] - current_node.position[1]
-            delta_theta = delta_theta_r = math.tan(delta_y/delta_x)
+            x, y = convert_uv_to_xy(current_node[0],current_node[1])
+            next_x, next_y = convert_uv_to_xy(next_node[0],next_node[1])
+
+            delta_x = next_x - x
+            delta_y = next_y - y
+            delta_theta = math.atan2(next_y,next_x) - math.atan2(y,x)
+
+            pose = Pose()
+            pose.position.x = x
+            pose.position.y = y
+            pose.position.z = 0
+
+            rotation = 0
+            if delta_y > 0:
+                rotation = 90
+            elif delta_y < 0:
+                rotation = 270
+
+            quat_array = euler_to_quat([0,0,rotation],True)
+            pose.orientation = Quaternion(quat_array[0],quat_array[1],quat_array[2],quat_array[3])
+
 
             #convert theta to robot coordinate frame
-            rotation_matrix = np.array()
-            delta_W = np.dot(np.array(delta_x, delta_y, delta_theta), rotation_matrix)
+            #rotation_matrix = np.array()
+            #delta_W = np.dot(np.array(delta_x, delta_y, delta_theta), rotation_matrix)
             
-            trajectory.append(delta_W)
+            trajectory.append(pose)
 
 
+        poseArray.poses = trajectory
         # publish trajectory
-        self.traj_pub.publish(self.trajectory.toPoseArray())
+        self.traj_pub.publish(poseArray)
 
         # visualize trajectory Markers
         self.trajectory.publish_viz()
