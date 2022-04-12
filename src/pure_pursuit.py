@@ -43,9 +43,9 @@ class PurePursuit(object):
         # rospy.loginfo("ODOM CALLBACK -------------------")
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
-        rospy.loginfo("CAR POSITION ---------------")
-        rospy.loginfo(x)
-        rospy.loginfo(y)
+        # rospy.loginfo("CAR POSITION ---------------")
+        # rospy.loginfo(x)
+        # rospy.loginfo(y)
         quat = msg.pose.pose.orientation
         orientation = tf.transformations.euler_from_quaternion(np.array([quat.x, quat.y, quat.z, quat.w]))
         theta = orientation[2]
@@ -85,7 +85,7 @@ class PurePursuit(object):
 
         # find the differences between the x and y values of current location and points
         points_diff = np.apply_along_axis(self.diff, 1, self.trajectory.points)
-        points_dist = np.apply_along_axis(dist, 0, points_diff)
+        points_dist = np.apply_along_axis(dist, 1, points_diff)
         # rospy.loginfo("POINTS DIFF ----------------------------")
         # rospy.loginfo(points_diff)
 
@@ -106,7 +106,7 @@ class PurePursuit(object):
         front_points = traj_pts_arr[front_trajectory_points]
 
         # find closest point in front of the car
-        point_distances = np.apply_along_axis(dist, 0, front_points)
+        point_distances = np.apply_along_axis(dist, 1, front_points)
         closest_point = np.amin(point_distances)
         idx = np.where(point_distances == closest_point)[0]
 
@@ -116,19 +116,20 @@ class PurePursuit(object):
         # rospy.loginfo(idx)
         (point_x, point_y) = (traj_pts_arr[idx][0][0], traj_pts_arr[idx][0][1])
         (point2_x, point2_y) = (traj_pts_arr[idx+1][0][0], traj_pts_arr[idx+1][0][1])
-        (relative_x, relative_y) = self.closest_point_on_line((point_x, point_y), (point2_x, point2_y))
-    
+        # (relative_x, relative_y) = self.closest_point_on_line((point_x, point_y), (point2_x, point2_y))
+        (relative_x, relative_y) = (self.car_point[0] - point_x, self.car_point[1] - point_y)
         distance_to_point = np.sqrt((self.car_point[0] - point_x)**2 + (self.car_point[1] - point_y)**2)
 
-        rospy.loginfo("Car pose: (%f, %f), Closest point: (%f, %f)", car_x, car_y, point_x, point_y)
-        rospy.loginfo("Distance to closest point: %f", distance_to_point)
+        # rospy.loginfo("Car pose: (%f, %f), Closest point: (%f, %f)", car_x, car_y, point_x, point_y)
+        # rospy.loginfo("Distance to closest point: %f", distance_to_point)
 
         alpha = np.arctan2(relative_x, relative_y)
         rospy.loginfo("ALPHA ---------------------------------------")
         rospy.loginfo(alpha)
-        rospy.loginfo(idx)
-        angle_cmd = np.arctan2(2 * self.wheelbase_length * np.sin(alpha), distance_to_point)
+        # rospy.loginfo(idx)
 
+        angle_cmd = np.arctan2(2 * self.wheelbase_length * np.sin(alpha), distance_to_point)
+        rospy.loginfo(angle_cmd)
         if alpha < 0:
             self.drive_cmd.drive.steering_angle = -angle_cmd
         else:
