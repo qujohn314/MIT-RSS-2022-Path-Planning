@@ -18,7 +18,7 @@ from scipy.spatial.transform import Rotation as R
 
 class VisualizationTools:
 
-    def plot_line(self, x, y, publisher, frame = "/map"):
+    def plot_line(self, x, y, color, publisher, frame = "/map"):
         """
         Publishes the points (x, y) to publisher
         so they can be visualized in rviz as
@@ -41,14 +41,10 @@ class VisualizationTools:
         line_strip.scale.x = 0.1
         line_strip.scale.y = 0.1
         line_strip.color.a = 1.
-        line_strip.color.r = 0.0
-        line_strip.color.g = 1.0
-        line_strip.color.b = 0.0
+        line_strip.color.r = color[0]
+        line_strip.color.g = color[1]
+        line_strip.color.b = color[2]
         
-        rospy.loginfo("x")
-        rospy.loginfo(x)
-        rospy.loginfo("y")
-        rospy.loginfo(y)
         # Fill the line with the desired values
         for xi, yi in zip(x, y):
             p = Point()
@@ -76,7 +72,7 @@ class PathPlan(object):
         self.initial_pose = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped, self.initial_pose_cb)
         self.map_sub = rospy.Subscriber("/map", OccupancyGrid, self.map_cb)
         self.trajectory = LineTrajectory("/planned_trajectory")
-        self.start_point = rospy.Publisher("/planned_trajectory/start_point", Marker, queue_size=1)
+        self.start_point = rospy.Publisher("/planned_trajectory/start_point", Marker, queue_size=10)
         self.end_point = rospy.Publisher("/planned_trajectory/end_pose", Marker, queue_size=10)
         self.path = rospy.Publisher("/planned_trajectory/path", Marker, queue_size=1)
         self.goal_sub = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_cb, queue_size=10)
@@ -91,11 +87,6 @@ class PathPlan(object):
         self.resolution = msg.info.resolution
     
         data = np.reshape(msg.data, (msg.info.height, msg.info.width))
-        # pixel_grid = np.zeros((int(msg.info.height), int(msg.info.width)))
-        # for u in range(len(pixel_grid)):
-        #     for v in range(len(pixel_grid[u])):
-        #         pixel_grid[v, u] = data[v, u]
-        # self.grid = pixel_grid
         self.grid = data
         self.map_acquired = True
 
@@ -152,29 +143,6 @@ class PathPlan(object):
         y = msg.twist.twist.linear.y
         # theta = msg.twist.twist.angular.z
         self.start = self.convert_xy_to_uv((x,y))
-
-        start_point_marker = Marker()
-        start_point_marker.header.frame_id = '/map'
-        start_point_marker.id = 100
-        start_point_marker.type = start_point_marker.POINTS
-        start_point_marker.action = start_point_marker.ADD
-        start_point_marker.scale.x = 0.1
-        start_point_marker.scale.y = 0.1
-        start_point_marker.scale.z = 0.1
-        
-        start_point_marker.pose.position.x = self.start[0]
-        start_point_marker.pose.position.y = self.start[1]
-        start_point_marker.pose.position.z = 0
-
-        start_point_marker.pose.orientation = Quaternion(0,0,0,1)
-
-        start_point_marker.color.a = 1.0
-        start_point_marker.color.r = 0
-        start_point_marker.color.g = 0.9
-        start_point_marker.color.b = 0.2
-        
-        self.start_point.publish(start_point_marker)
-        
     
     def initial_pose_cb(self, msg):
         if not self.map_acquired:
@@ -185,22 +153,24 @@ class PathPlan(object):
 
         start_point_marker = Marker()
         start_point_marker.header.frame_id = '/map'
-        start_point_marker.type = start_point_marker.POINTS
+        start_point_marker.type = start_point_marker.SPHERE
         start_point_marker.action = start_point_marker.ADD
-        start_point_marker.scale.x = 0.1
-        start_point_marker.scale.y = 0.1
-        start_point_marker.scale.z = 0.1
+        start_point_marker.scale.x = 0.4
+        start_point_marker.scale.y = 0.4
+        start_point_marker.scale.z = 0.4
         
-        start_point_marker.pose.position.x = self.start[0]
-        start_point_marker.pose.position.y = self.start[1]
+        start_point_marker.pose.position.x = x
+        start_point_marker.pose.position.y = y
         start_point_marker.pose.position.z = 0
 
-        # start_point_marker.pose.orientation = Quaternion(0,0,0,1)
+        start_point_marker.pose.orientation = Quaternion(0,0,0,1)
 
         start_point_marker.color.a = 1.0
-        start_point_marker.color.r = 0
-        start_point_marker.color.g = 0.9
-        start_point_marker.color.b = 0.2
+        start_point_marker.color.r = 1.0
+        start_point_marker.color.g = 0
+        start_point_marker.color.b = 1.0
+
+
         self.new_path_to_create = True
         self.start_point.publish(start_point_marker)
 
@@ -211,24 +181,30 @@ class PathPlan(object):
         x = msg.pose.position.x
         y = msg.pose.position.y
         # theta = msg.twist.twist.angular.z
-        self.new_path_to_create = True
         self.end = self.convert_xy_to_uv((x,y))
 
-        # end_point_marker = Marker()
-        # end_point_marker.type = Marker.POINTS
-        # end_point_marker.scale.x = 1
-        # end_point_marker.scale.y = 1
+        end_point_marker = Marker()
+        end_point_marker.header.frame_id = '/map'
+        end_point_marker.type = end_point_marker.SPHERE
+        end_point_marker.action = end_point_marker.ADD
+        end_point_marker.scale.x = 0.4
+        end_point_marker.scale.y = 0.4
+        end_point_marker.scale.z = 0.4
 
-        # end_point_marker.header.frame_id = '/map'
         
-        # end_point_marker.pose.position.x = self.end[0]
-        # end_point_marker.pose.position.y = self.end[1]
-        # end_point_marker.pose.position.z = 0
+        
+        end_point_marker.pose.position.x = x
+        end_point_marker.pose.position.y = y
+        end_point_marker.pose.position.z = 0
 
-        # end_point_marker.pose.orientation = Quaternion(0,0,0,1)
-        # end_point_marker.color.a = 1.0
+        end_point_marker.pose.orientation = Quaternion(0,0,0,1)
+        end_point_marker.color.a = 1.0
+        end_point_marker.color.r = 1.0
+        end_point_marker.color.g = 0
+        end_point_marker.color.b = 1.0
 
-        # self.end_point.publish(end_point_marker)
+        self.new_path_to_create = True
+        self.end_point.publish(end_point_marker)
 
 
     def heuristic(self, a, b):
@@ -263,8 +239,6 @@ class PathPlan(object):
         # Create start and end node
 
         open_list.put((0, start_point))
-        # rospy.loginfo(start_point)
-        # rospy.loginfo(grid[start_point[1]][start_point[0]])
         # Loop until you find the end
         while not open_list.empty():
             current = open_list.get()[1]
@@ -290,8 +264,6 @@ class PathPlan(object):
                     priority = new_cost + self.heuristic(neighbor, end_point)
                     open_list.put((priority, neighbor))
                     came_from[neighbor] = current
-            # rospy.loginfo("Queue size")
-            # rospy.loginfo(open_list.qsize())
 
         # Found the goal
         if found_goal:
@@ -334,10 +306,6 @@ class PathPlan(object):
             vector_arr.append(vector1)
 
             rotation = math.atan2(delta_y,delta_x)
-            #if delta_y > 0:
-                #rotation = 90
-           # elif delta_y < 0:
-                #rotation = 270
 
             quat_array = self.euler_to_quat([0,0,rotation])
             pose.orientation = Quaternion(quat_array[0],quat_array[1],quat_array[2],quat_array[3])
@@ -357,19 +325,9 @@ class PathPlan(object):
         # visualize trajectory Markers
         self.trajectory.publish_viz()
 
-        # x = []
-        # y = []
-        # path_coord = []
-        # for i in range(len(final_path)-1):
-        #     x.append(final_path[i+1][0])
-        #     y.append(final_path[i+1][1])
-
-        # rospy.loginfo("all paths")
-        # rospy.loginfo(type(x))
-        # rospy.loginfo(type(y))
 
         visualize = VisualizationTools()
-        visualize.plot_line(map_x, map_y, self.path, frame='/map')
+        visualize.plot_line(map_x, map_y, [0,1,0], self.path, frame='/map')
 
 if __name__=="__main__":
     rospy.init_node("path_planning")
