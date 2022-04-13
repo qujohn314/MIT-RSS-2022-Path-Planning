@@ -22,8 +22,8 @@ class PurePursuit(object):
     def __init__(self):
         # self.odom_topic = rospy.get_param("~odom_topic")  # TODO: This is throwing an error for some reason
         self.odom_topic = "/odom"
-        self.standard_lookahead = 2  # TODO: Refine this number; change with trajectory to optimize as well
-        self.lookahead_distance = 2  # lookahead distance currently being used; scaled in pure_pursuit() based on curvature of trajectory
+        self.standard_lookahead = 1  # TODO: Refine this number; change with trajectory to optimize as well
+        self.lookahead_distance = 1  # lookahead distance currently being used; scaled in pure_pursuit() based on curvature of trajectory
         self.speed = 1  # TODO: Any changes needed? Do we need to get speed as parameter?
         self.wheelbase_length = 0.8  #TODO is this okay? 
         self.trajectory = utils.LineTrajectory("/followed_trajectory")
@@ -77,23 +77,23 @@ class PurePursuit(object):
 
         if discriminant < 0:  # No intersection between circle and line
             rospy.loginfo("No intersection between lookahead circle and current segment...")
-            return pt2
+            rospy.loginfo(self.points_idx)
+            return pt1
         else:  # There may be 0, 1, or 2 intersections with the segment
             intersections = [
                 (cx + (big_d * dy + sign * (-1 if dy < 0 else 1) * dx * discriminant**.5) / dr ** 2, cy + (-big_d * dx + sign * abs(dy) * discriminant**.5) / dr ** 2) for sign in ((1, -1) if dy < 0 else (-1, 1))]  # This makes sure the order along the segment is correct
                 # If only considering the segment, filter out intersections that do not fall within the segment
             fraction_along_segment = [(xi - p1x) / dx if abs(dx) > abs(dy) else (yi - p1y) / dy for xi, yi in intersections]
             intersections = [pt for pt, frac in zip(intersections, fraction_along_segment) if 0 <= frac <= 1]
-            if len(intersections) == 2 and abs(discriminant) <= tangent_tol:  # If line is tangent to circle, return just one point (as both intersections have same location)
+            if len(intersections) >= 1 and abs(discriminant) <= tangent_tol:  # If line is tangent to circle, return just one point (as both intersections have same location)
                 return intersections[0]
             else:
                 if len(intersections) == 0:
-                    rospy.loginfo("No intersection between lookahead circle and current segment...")
-
-                    return pt2
+                    rospy.loginfo("No intersection between lookahead circle and current segment...HERE")
+                    return pt1
                 if len(intersections) > 1:
                     assert len(intersections) == 2
-                    if distance_from_pt2(intersections[1]) > distance_from_pt2(intersections[0]): # pt closer to pt2
+                    if distance_from_pt2(intersections[1]) < distance_from_pt2(intersections[0]): # pt closer to pt2
                         return intersections[1]
                     else:
                         return intersections[0]
@@ -139,6 +139,7 @@ class PurePursuit(object):
         rospy.loginfo(closest_points_idx)
 
         idx1 = closest_points_idx[0]
+        # idx1 = max(0, idx2-1)
         idx2 = min(idx1+1, len(self.trajectory.points)-1)
         idx3 = min(idx2+1, len(self.trajectory.points)-1)
 
@@ -175,6 +176,9 @@ class PurePursuit(object):
 
         
     def update_idx(self):
+        rospy.loginfo("UPDATING IDX!!!!!! --------------")
+        rospy.loginfo(self.points_idx)
+
         self.points_idx[0] = self.points_idx[1]
         self.points_idx[1] = self.points_idx[2]
         self.points_idx[2] = min(self.points_idx[2] + 1, len(self.trajectory.points)-1)
@@ -182,8 +186,6 @@ class PurePursuit(object):
         rospy.loginfo(self.points_idx)
 
         self.points_list = np.array(self.trajectory.points)[self.points_idx]
-        rospy.loginfo("point list --------------")
-        rospy.loginfo(self.points_list)
 
 
     def pure_pursuit(self):
@@ -208,7 +210,7 @@ class PurePursuit(object):
         # rospy.loginfo("RELATIVE DISTANCES --------------------------------OOOOOOOOOOOOOO")
         # rospy.loginfo(self.relative_dist)
 
-        if self.relative_dist[1] < self.standard_lookahead:
+        if self.relative_dist[1] < self.standard_lookahead/2.0:
             self.update_idx()
 
         # if self.relative_dist[1] > self.standard_lookahead:
