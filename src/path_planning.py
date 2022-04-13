@@ -18,8 +18,7 @@ from scipy.spatial.transform import Rotation as R
 
 class VisualizationTools:
 
-    @staticmethod
-    def plot_line(x, y, publisher, color = (1., 0., 0.), frame = "/map"):
+    def plot_line(self, x, y, publisher, color = (1., 0., 0.), frame = "/map"):
         """
         Publishes the points (x, y) to publisher
         so they can be visualized in rviz as
@@ -35,16 +34,16 @@ class VisualizationTools:
         """
         # Construct a line
         line_strip = Marker()
-        line_strip.type = Marker.LINE_STRIP
+        line_strip.type = line_strip.LINE_STRIP
         line_strip.header.frame_id = frame
 
         # Set the size and color
         line_strip.scale.x = 0.1
         line_strip.scale.y = 0.1
         line_strip.color.a = 1
-        line_strip.color.r = color[0]
-        line_strip.color.g = color[1]
-        line_strip.color.g = color[2]
+        line_strip.color.r = 0.9
+        line_strip.color.g = 0
+        line_strip.color.b = 0.1
 
         # Fill the line with the desired values
         for xi, yi in zip(x, y):
@@ -73,7 +72,7 @@ class PathPlan(object):
         self.initial_pose = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped, self.initial_pose_cb)
         self.map_sub = rospy.Subscriber("/map", OccupancyGrid, self.map_cb)
         self.trajectory = LineTrajectory("/planned_trajectory")
-        self.start_point = rospy.Publisher("/planned_trajectory/start_point", Marker, queue_size=10)
+        self.start_point = rospy.Publisher("/planned_trajectory/start_point", Marker, queue_size=1)
         self.end_point = rospy.Publisher("/planned_trajectory/end_pose", Marker, queue_size=10)
         self.path = rospy.Publisher("/planned_trajectory/path", Marker, queue_size=1)
         self.goal_sub = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_cb, queue_size=10)
@@ -161,7 +160,7 @@ class PathPlan(object):
         start_point_marker.pose.position.y = self.start[1]
         start_point_marker.pose.position.z = 0
 
-        # start_point_marker.pose.orientation = Quaternion(0,0,0,1)
+        start_point_marker.pose.orientation = Quaternion(0,0,0,1)
 
         start_point_marker.color.a = 1.0
         start_point_marker.color.r = 0
@@ -356,11 +355,9 @@ class PathPlan(object):
             x.append(final_path[i+1][0])
             y.append(final_path[i+1][1])
 
-        x = np.array(x)
-        y = np.array(y)
-        rospy.loginfo("all paths")
-        rospy.loginfo(x)
-        rospy.loginfo(y)
+        # rospy.loginfo("all paths")
+        # rospy.loginfo(type(x))
+        # rospy.loginfo(type(y))
 
         visualize = VisualizationTools()
         visualize.plot_line(x, y, self.path, frame='/map')
