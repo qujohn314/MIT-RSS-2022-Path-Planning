@@ -79,6 +79,8 @@ class PathPlan(object):
         self.traj_pub = rospy.Publisher("/trajectory/current", PoseArray, queue_size=10)
         self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_cb)
 
+        self.new_path_to_create = True
+
 
     def map_cb(self, msg):
         self.create_rot_matrix(msg)
@@ -132,7 +134,7 @@ class PathPlan(object):
         # Then apply the translation 
         shifted = rotated + self.translation
         # Only return the (x,y) point because last point is unnecessary
-        return (np.rint(shifted[0]).astype(np.int32), np.rint(shifted[1]).astype(np.int32))
+        return (shifted[0], shifted[1])
     
     def euler_to_quat(self, euler,deg=False):
         r = R.from_euler('xyz', euler,degrees=deg)
@@ -195,7 +197,7 @@ class PathPlan(object):
         start_point_marker.color.r = 0
         start_point_marker.color.g = 0.9
         start_point_marker.color.b = 0.2
-
+        self.new_path_to_create = True
         self.start_point.publish(start_point_marker)
 
     def goal_cb(self, msg):
@@ -205,6 +207,7 @@ class PathPlan(object):
         x = msg.pose.position.x
         y = msg.pose.position.y
         # theta = msg.twist.twist.angular.z
+        self.new_path_to_create = True
         self.end = self.convert_xy_to_uv((x,y))
 
         # end_point_marker = Marker()
@@ -306,6 +309,7 @@ class PathPlan(object):
 
         # convert the path to a trajectory
         trajectory = [] #initialize series of piecewise points
+        vector_arr = []
         poseArray = PoseArray()
         poseArray.header.frame_id = "/map"
         for i in range(1, len(final_path)-1):
@@ -318,22 +322,22 @@ class PathPlan(object):
 
             delta_x = next_x - x
             delta_y = next_y - y
-            delta_theta = math.atan2(next_y,next_x) - math.atan2(y,x)
+            vector1 = (delta_x,delta_y)
 
             pose = Pose()
             pose.position.x = x
             pose.position.y = y
             pose.position.z = 0
 
-            rotation = 0
-            if delta_x > 0:
-                rotation = 180
-            if delta_y > 0:
-                rotation = 90
-            elif delta_y < 0:
-                rotation = 270
+            vector_arr.append(vector1)
 
-            quat_array = self.euler_to_quat([0,0,rotation],True)
+            rotation = math.atan2(delta_y,delta_x)
+            #if delta_y > 0:
+                #rotation = 90
+           # elif delta_y < 0:
+                #rotation = 270
+
+            quat_array = self.euler_to_quat([0,0,rotation])
             pose.orientation = Quaternion(quat_array[0],quat_array[1],quat_array[2],quat_array[3])
 
 
@@ -346,6 +350,8 @@ class PathPlan(object):
 
         poseArray.poses = trajectory
         # publish trajectory
+
+        rospy.loginfo(vector_arr)
         self.traj_pub.publish(poseArray)
 
         # visualize trajectory Markers
@@ -353,13 +359,19 @@ class PathPlan(object):
 
         x = []
         y = []
+        path_coord = []
         for i in range(len(final_path)-1):
             x.append(final_path[i+1][0])
             y.append(final_path[i+1][1])
 
+<<<<<<< HEAD
         # rospy.loginfo("all paths")
         # rospy.loginfo(type(x))
         # rospy.loginfo(type(y))
+=======
+        x = np.array(x)
+        y = np.array(y)
+>>>>>>> efd032587ae2a946026d7741329406a32e84d359
 
         visualize = VisualizationTools()
         visualize.plot_line(x, y, self.path, frame='/map')
@@ -367,9 +379,13 @@ class PathPlan(object):
 if __name__=="__main__":
     rospy.init_node("path_planning")
     pf = PathPlan()
+    rate = rospy.Rate(50)
     while pf.start is None or pf.end is None:
         continue
-    # rospy.loginfo("INITIALIZED AND RUNNING!!!")
-    pf.plan_path(pf.start, pf.end, pf.grid)
-    # rospy.loginfo("Path complete")
-    rospy.spin()
+
+    while not rospy.is_shutdown():
+        if(pf.new_path_to_create):
+            pf.plan_path(pf.start, pf.end, pf.grid)
+            pf.new_path_to_create = False
+        rate.sleep()
+    
