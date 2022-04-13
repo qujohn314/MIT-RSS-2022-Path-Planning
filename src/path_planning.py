@@ -18,7 +18,7 @@ from scipy.spatial.transform import Rotation as R
 
 class VisualizationTools:
 
-    def plot_line(self, x, y, publisher, color = (1., 0., 0.), frame = "/map"):
+    def plot_line(self, x, y, publisher, frame = "/map"):
         """
         Publishes the points (x, y) to publisher
         so they can be visualized in rviz as
@@ -40,11 +40,15 @@ class VisualizationTools:
         # Set the size and color
         line_strip.scale.x = 0.1
         line_strip.scale.y = 0.1
-        line_strip.color.a = 1
-        line_strip.color.r = 0.9
-        line_strip.color.g = 0
-        line_strip.color.b = 0.1
-
+        line_strip.color.a = 1.
+        line_strip.color.r = 0.0
+        line_strip.color.g = 1.0
+        line_strip.color.b = 0.0
+        
+        rospy.loginfo("x")
+        rospy.loginfo(x)
+        rospy.loginfo("y")
+        rospy.loginfo(y)
         # Fill the line with the desired values
         for xi, yi in zip(x, y):
             p = Point()
@@ -280,12 +284,6 @@ class PathPlan(object):
                 
                 # Increase the cost by one
                 new_cost = cost_so_far[current] + 1
-                # rospy.loginfo("list")
-                # rospy.loginfo(cost_so_far)
-                # rospy.loginfo("new_cost")
-                # rospy.loginfo(new_cost)
-                # rospy.loginfo("cost_so_far")
-                # rospy.loginfo(cost_so_far[neighbor])
                 
                 if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
                     cost_so_far[neighbor] = new_cost
@@ -310,6 +308,8 @@ class PathPlan(object):
         # convert the path to a trajectory
         trajectory = [] #initialize series of piecewise points
         vector_arr = []
+        map_x = []
+        map_y = []
         poseArray = PoseArray()
         poseArray.header.frame_id = "/map"
         for i in range(1, len(final_path)-1):
@@ -318,6 +318,8 @@ class PathPlan(object):
 
             # Publish the point
             x, y = self.convert_uv_to_xy((current_node[0],current_node[1]))
+            map_x.append(x)
+            map_y.append(y)
             next_x, next_y = self.convert_uv_to_xy((next_node[0],next_node[1]))
 
             delta_x = next_x - x
@@ -350,31 +352,24 @@ class PathPlan(object):
 
         poseArray.poses = trajectory
         # publish trajectory
-
-        rospy.loginfo(vector_arr)
         self.traj_pub.publish(poseArray)
 
         # visualize trajectory Markers
         self.trajectory.publish_viz()
 
-        x = []
-        y = []
-        path_coord = []
-        for i in range(len(final_path)-1):
-            x.append(final_path[i+1][0])
-            y.append(final_path[i+1][1])
+        # x = []
+        # y = []
+        # path_coord = []
+        # for i in range(len(final_path)-1):
+        #     x.append(final_path[i+1][0])
+        #     y.append(final_path[i+1][1])
 
-<<<<<<< HEAD
         # rospy.loginfo("all paths")
         # rospy.loginfo(type(x))
         # rospy.loginfo(type(y))
-=======
-        x = np.array(x)
-        y = np.array(y)
->>>>>>> efd032587ae2a946026d7741329406a32e84d359
 
         visualize = VisualizationTools()
-        visualize.plot_line(x, y, self.path, frame='/map')
+        visualize.plot_line(map_x, map_y, self.path, frame='/map')
 
 if __name__=="__main__":
     rospy.init_node("path_planning")
