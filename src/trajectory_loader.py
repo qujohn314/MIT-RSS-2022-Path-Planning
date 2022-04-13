@@ -28,7 +28,7 @@ class LoadTrajectory(object):
 
 
     def publish_trajectory(self):
-        print "Publishing trajectory to:", self.pub_topic
+        print("Publishing trajectory to:", self.pub_topic)
         self.traj_pub.publish(self.trajectory.toPoseArray())
 
 if __name__=="__main__":
