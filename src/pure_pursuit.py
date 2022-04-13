@@ -6,6 +6,8 @@ import time
 import utils
 import tf
 
+import sys
+
 
 from geometry_msgs.msg import PoseArray, PoseStamped
 from visualization_msgs.msg import Marker
@@ -64,6 +66,7 @@ class PurePursuit(object):
         """ Find the points at which a circle intersects a line-segment.
         Returns p2 if no intersection is found, otherwise returns intersection that is closest to p2.
         """
+        distance_from_pt2 = lambda p: ((pt2[0] - p[0])**2 + (pt2[1] - p[1])**2)**0.5
 
         (p1x, p1y), (p2x, p2y), (cx, cy) = pt1, pt2, self.car_point
         (x1, y1), (x2, y2) = (p1x - cx, p1y - cy), (p2x - cx, p2y - cy)
@@ -73,6 +76,7 @@ class PurePursuit(object):
         discriminant = self.lookahead_distance ** 2 * dr ** 2 - big_d ** 2
 
         if discriminant < 0:  # No intersection between circle and line
+            rospy.loginfo("No intersection between lookahead circle and current segment...")
             return pt2
         else:  # There may be 0, 1, or 2 intersections with the segment
             intersections = [
@@ -84,10 +88,12 @@ class PurePursuit(object):
                 return intersections[0]
             else:
                 if len(intersections) == 0:
+                    rospy.loginfo("No intersection between lookahead circle and current segment...")
+
                     return pt2
                 if len(intersections) > 1:
                     assert len(intersections) == 2
-                    if np.linalg.norm(intersections[1], pt2) > np.linalg.norm(intersections[0], pt2): # pt closer to pt2
+                    if distance_from_pt2(intersections[1]) > distance_from_pt2(intersections[0]): # pt closer to pt2
                         return intersections[1]
                     else:
                         return intersections[0]
@@ -109,16 +115,28 @@ class PurePursuit(object):
         # find two closest points to the car (as idx along traj) and pick the one furthest from the start point
         car_x = self.car_point[0]
         car_y = self.car_point[1]
+        rospy.loginfo("CAR POSITION ---------------------------------!!!!!!!!!!!!!!!!!!????????????")
+        rospy.loginfo(self.car_point)
+
 
         dist = lambda p: np.sqrt((self.car_point[0] - p[0])**2 + (self.car_point[1] - p[1])**2)
-        points_diff = np.apply_along_axis(self.diff, 1, self.trajectory.points)
-        points_dist = np.apply_along_axis(dist, 1, points_diff)
+        # points_diff = np.apply_along_axis(self.diff, 1, self.trajectory.points)
+        points_dist = np.apply_along_axis(dist, 1, self.trajectory.points)
+        rospy.loginfo("trajectory points --------------")
+        rospy.loginfo(self.trajectory.points)
+
+        rospy.loginfo("points dist --------------")
+        rospy.loginfo(points_dist)
+
         
         closest_points_idx = np.argpartition(points_dist, 2)[:2] # get the two closest points
+
+        closest_points_dist = np.array(map(self.trajectory.distance_along_trajectory, closest_points_idx))  
+        sorted_idx = np.argsort(-closest_points_dist)
+        closest_points_idx = closest_points_idx[np.argsort(-closest_points_dist)] # sort points in descending order, furthest along trajectory
+        
         rospy.loginfo("Closest point idx --------------")
         rospy.loginfo(closest_points_idx)
-        closest_points_dist = np.array(map(self.trajectory.distance_along_trajectory, closest_points_idx))     
-        closest_points_idx = np.argsort(-closest_points_dist) # sort points in descending order, furthest along trajectory
 
         idx1 = closest_points_idx[0]
         idx2 = min(idx1+1, len(self.trajectory.points)-1)
@@ -129,7 +147,10 @@ class PurePursuit(object):
         rospy.loginfo(self.points_idx)
 
         self.points_list = np.array(self.trajectory.points)[self.points_idx]
+        rospy.loginfo("point list --------------")
+        rospy.loginfo(self.points_list)
 
+        
 
     def curvature(self):
         """
@@ -152,6 +173,18 @@ class PurePursuit(object):
         curvature = 4*area/(ab * ac * bc)
         return curvature
 
+        
+    def update_idx(self):
+        self.points_idx[0] = self.points_idx[1]
+        self.points_idx[1] = self.points_idx[2]
+        self.points_idx[2] = min(self.points_idx[2] + 1, len(self.trajectory.points)-1)
+        rospy.loginfo("point idx --------------")
+        rospy.loginfo(self.points_idx)
+
+        self.points_list = np.array(self.trajectory.points)[self.points_idx]
+        rospy.loginfo("point list --------------")
+        rospy.loginfo(self.points_list)
+
 
     def pure_pursuit(self):
         """
@@ -168,57 +201,37 @@ class PurePursuit(object):
             self.find_segment_idxs()
         
         distance_from_car = lambda p: np.sqrt((self.car_point[0] - p[0])**2 + (self.car_point[1] - p[1])**2)
-        get_relative_points = lambda p: (self.car_point[0] - p[0], self.car_point[1] - p[1])
-        
-        print("points list: ", self.points_list)
-        self.relative_dist = np.apply_along_axis(distance_from_car, 0, self.points_list)
-        
+        dist = lambda p: np.sqrt((self.car_point[0] - p[0])**2 + (self.car_point[1] - p[1])**2)
 
-        if self.relative_dist[1] < self.lookahead_distance:
+
+        self.relative_dist = np.apply_along_axis(distance_from_car, 1, self.points_list)
+        # rospy.loginfo("RELATIVE DISTANCES --------------------------------OOOOOOOOOOOOOO")
+        # rospy.loginfo(self.relative_dist)
+
+        if self.relative_dist[1] < self.standard_lookahead:
+            self.update_idx()
+
+        # if self.relative_dist[1] > self.standard_lookahead:
             # Case 1: We have three unique points and use a point on line segment 1
-            if self.points_idx[1] == self.points_idx[2]:
-                # When we get to end of trajectory and don't have three unique points
-                curvature = 1
+        if self.points_idx[1] == self.points_idx[2]:
+            # When we get to end of trajectory and don't have three unique points
+            curvature = 1
 
-            elif self.curvature() > 1:
-                # Need to add this in case of curvature = 0, i.e. straight line
-                curvature = self.curvature()
-            else:
-                curvature = 1
-                
-            self.lookahead_distance = 1/curvature * self.standard_lookahead # scale lookahead distance based on inverse of trajectory curvature           
-            pursuit_point = self.closest_point_to_lookahead(self.points_list[0], self.points_list[1]) # point we use for pure pursuit algorithm  
-            relative_xy = (self.car_point[0] - pursuit_point[0], self.car_point[1] - pursuit_point[1]) # relative diff in x, y between car and pursuit point           
-            distance_to_pursuit_point = np.sqrt(relative_xy[0]**2 + relative_xy[1]**2)  # distance from point to car
-            alpha = np.arctan2(relative_xy[1], relative_xy[0])  # angle between point and car
-            angle_cmd = np.arctan2(2 * self.wheelbase_length * np.sin(alpha), distance_to_pursuit_point)  # pure pursuit command
-
+        elif self.curvature() > 10000000:
+            # Need to add this in case of curvature = 0, i.e. straight line
+            curvature = self.curvature()
         else:
-            # Case 2: We have three unique points and use a point on line segment 2
-            if self.points_idx[1] == points_idx[2]:
-                # When we get to end of trajectory and don't have three unique points
-                curvature = 1
+            curvature = 1
+            
+        self.lookahead_distance = 1/curvature * self.standard_lookahead # scale lookahead distance based on inverse of trajectory curvature           
+        pursuit_point = self.closest_point_to_lookahead(self.points_list[0], self.points_list[1]) # point we use for pure pursuit algorithm  
+        # pursuit_point = self.points_list[0]
+        relative_xy = (self.car_point[0] - pursuit_point[0], self.car_point[1] - pursuit_point[1]) # relative diff in x, y between car and pursuit point           
+        distance_to_pursuit_point = np.sqrt(relative_xy[0]**2 + relative_xy[1]**2)  # distance from point to car
+        alpha = np.arctan2(relative_xy[1], relative_xy[0]) + self.car_theta # angle between point and car
 
-            elif self.curvature() > 1:
-                # Need to add this in case of curvature = 0, i.e. straight line
-                curvature = self.curvature()
-            else:
-                curvature = 1          
-                
-            pursuit_point = self.closest_point_to_lookahead(self.points_list[1], self.points_list[2]) # point we use for pure pursuit algorithm
-            relative_xy = (self.car_point[0] - pursuit_point[0], self.car_point[1] - pursuit_point[1]) # relative diff in x, y between car and pursuit point
-            distance_to_pursuit_point = np.sqrt(relative_xy[0]**2 + relative_xy[1]**2)  # distance from point to car
-            alpha = np.arctan2(relative_xy[1], relative_xy[0])  # angle between point and car
-            angle_cmd = np.arctan2(2 * self.wheelbase_length * np.sin(alpha), distance_to_pursuit_point)  # pure pursuit command  
-
-
-        
-        angle_cmd = np.arctan2(2 * self.wheelbase_length * np.sin(alpha), distance_to_pursuit_point)
-        # rospy.loginfo(angle_cmd)
-        # if alpha < 0:
-        #     self.drive_cmd.drive.steering_angle = angle_cmd
-        # else:
-        #     self.drive_cmd.drive.steering_angle = angle_cmd
+        angle_cmd = 0.5 * np.arctan2(2 * self.wheelbase_length * np.sin(alpha), distance_to_pursuit_point)
+            
         self.drive_cmd.drive.steering_angle = angle_cmd
 
         self.drive_pub.publish(self.drive_cmd)
