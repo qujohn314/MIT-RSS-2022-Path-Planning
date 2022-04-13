@@ -118,7 +118,7 @@ class PathPlan(object):
         u = float(rotated[0])/self.resolution
         v = float(rotated[1])/self.resolution
 
-        return (np.rint(u).astype(np.uint16),np.rint(v).astype(np.uint16))
+        return (np.rint(u).astype(np.int32),np.rint(v).astype(np.int32))
 
     def convert_uv_to_xy(self, u_v_coord):
         u = u_v_coord[0]
@@ -133,7 +133,7 @@ class PathPlan(object):
         # Then apply the translation 
         shifted = rotated + self.translation
         # Only return the (x,y) point because last point is unnecessary
-        return (np.rint(shifted[0]).astype(np.uint16), np.rint(shifted[1]).astype(np.uint16))
+        return (np.rint(shifted[0]).astype(np.int32), np.rint(shifted[1]).astype(np.int32))
     
     def euler_to_quat(self, euler,deg=False):
         r = R.from_euler('xyz', euler,degrees=deg)
@@ -327,6 +327,8 @@ class PathPlan(object):
             pose.position.z = 0
 
             rotation = 0
+            if delta_x > 0:
+                rotation = 180
             if delta_y > 0:
                 rotation = 90
             elif delta_y < 0:
