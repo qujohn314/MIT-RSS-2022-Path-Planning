@@ -165,10 +165,10 @@ class PathPlan(object):
 
         start_point_marker.pose.orientation = Quaternion(0,0,0,1)
 
-        start_point_marker.color.a = 1.0
-        start_point_marker.color.r = 1.0
-        start_point_marker.color.g = 0
-        start_point_marker.color.b = 1.0
+        start_point_marker.color.a = 0.5
+        start_point_marker.color.r = 0.0
+        start_point_marker.color.g = 1.0
+        start_point_marker.color.b = 0.0
 
 
         self.new_path_to_create = True
@@ -198,10 +198,10 @@ class PathPlan(object):
         end_point_marker.pose.position.z = 0
 
         end_point_marker.pose.orientation = Quaternion(0,0,0,1)
-        end_point_marker.color.a = 1.0
+        end_point_marker.color.a = 0.5
         end_point_marker.color.r = 1.0
         end_point_marker.color.g = 0
-        end_point_marker.color.b = 1.0
+        end_point_marker.color.b = 0.0
 
         self.new_path_to_create = True
         self.end_point.publish(end_point_marker)
@@ -211,14 +211,14 @@ class PathPlan(object):
         return (b[0]-a[0])**2 + (b[1]-a[1])**2
 
     def generate_neighbors(self, node):
-        north = (0,1)
-        northeast = (1,1)
-        east = (1,0)
-        southeast = (1,-1)
-        south = (0,-1)
-        southwest = (-1,-1)
-        west = (-1,0)
-        northwest = (-1,1)
+        north = (0,2)
+        northeast = (2,2)
+        east = (2,0)
+        southeast = (2,-2)
+        south = (0,-2)
+        southwest = (-2,-2)
+        west = (-2,0)
+        northwest = (-2,0)
         directions = [north, northeast, east, southeast, south, southwest, west, northwest]
         
         neighbors = []
