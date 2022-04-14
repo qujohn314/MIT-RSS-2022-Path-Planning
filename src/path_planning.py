@@ -211,14 +211,14 @@ class PathPlan(object):
         return (b[0]-a[0])**2 + (b[1]-a[1])**2
 
     def generate_neighbors(self, node):
-        north = (0,1)
-        northeast = (1,1)
-        east = (1,0)
-        southeast = (1,-1)
-        south = (0,-1)
-        southwest = (-1,-1)
-        west = (-1,0)
-        northwest = (-1,1)
+        north = (0,2)
+        northeast = (2,2)
+        east = (2,0)
+        southeast = (2,-2)
+        south = (0,-2)
+        southwest = (-2,-2)
+        west = (-2,0)
+        northwest = (-2,0)
         directions = [north, northeast, east, southeast, south, southwest, west, northwest]
         
         neighbors = []
