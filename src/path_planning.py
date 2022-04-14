@@ -70,6 +70,8 @@ class PathPlan(object):
 
         self.odom_topic = rospy.get_param("~odom_topic")
         self.initial_pose = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped, self.initial_pose_cb)
+        self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_cb)
+
         self.map_sub = rospy.Subscriber("/map", OccupancyGrid, self.map_cb)
         self.trajectory = LineTrajectory("/planned_trajectory")
         self.start_point = rospy.Publisher("/planned_trajectory/start_point", Marker, queue_size=10)
@@ -77,7 +79,7 @@ class PathPlan(object):
         self.path = rospy.Publisher("/planned_trajectory/path", Marker, queue_size=1)
         self.goal_sub = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_cb, queue_size=10)
         self.traj_pub = rospy.Publisher("/trajectory/current", PoseArray, queue_size=10)
-        self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_cb)
+        
 
         self.new_path_to_create = True
 
