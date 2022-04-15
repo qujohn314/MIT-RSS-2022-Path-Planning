@@ -62,7 +62,6 @@ class PurePursuit(object):
             tx, ty = self.trajectory.points[ind]
         else:  # toward goal
             tx, ty = self.trajectory.points[-1]
-            ind = len(trajectory.cx) - 1
 
         self.point_X_pub.publish(tx)
         self.point_Y_pub.publish(ty)
@@ -93,10 +92,19 @@ class PurePursuit(object):
             distance_this_index = self.calc_distance_from_car(self.trajectory.points[ind])
             print("IND: ", ind)
 
-            while ind + 1 < len(self.trajectory.points):
-                distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
+            while True:
+                try:
+                    distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
+                except:
+                    distance = self.calc_distance_from_car(self.trajectory.points[ind])
+                    time.sleep(distance / self.speed * 2)
+                    self.drive_cmd.drive.speed = 0
+                    self.drive_pub.publish(self.drive_cmd)
+                    print("Reached end of trajectory!")
+
                 if distance_this_index < distance_next_index:
-                    break
+                        break
+
                 ind = ind + 1 if (ind + 1) < len(self.trajectory.points) else ind
                 distance_this_index = distance_next_index
             self.old_nearest_point_index = ind
@@ -106,15 +114,6 @@ class PurePursuit(object):
 
         # search look ahead target point index
         while Lf > self.calc_distance_from_car(self.trajectory.points[ind]):
-            try:
-                distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
-            except:
-                distance = self.calc_distance_from_car(self.trajectory.points[ind])
-                time.sleep(distance / self.speed * 2)
-                self.drive_cmd.drive.speed = 0
-                self.drive_pub.publish(self.drive_cmd)
-                print("Reached end of trajectory!")
-
             if (ind + 1) >= len(self.trajectory.points)-1:
                 break  # not exceed goal
             ind += 1
@@ -122,9 +121,11 @@ class PurePursuit(object):
         # get distance of current line segment so we can scale lookahead distance by it
 
         # if 0 < ind < len(self.trajectory.points):
+        # rospy.loginfo("LPOJITYURSDFXGUIJKOJTYUFRDYFGIJOPKJITYUFDR")
         # rospy.loginfo(len(self.trajectory.points))
         self.trajectory.update_distances()
-        if ind <= 1:
+
+        if ind == 1:
             dist = self.trajectory.distance_along_trajectory(ind)
 
         else:
@@ -132,7 +133,10 @@ class PurePursuit(object):
             dist2 = self.trajectory.distance_along_trajectory(ind-1)
             dist = dist1 - dist2
 
-        if dist < self.default_lookahead_distance:
+        if ind == 0:
+            self.lookahead_distance = self.default_lookahead_distance
+
+        elif dist < self.default_lookahead_distance:
             self.lookahead_distance = dist / self.default_lookahead_distance * self.k * self.speed
             if self.lookahead_distance < self.min_lookahead_distance:
                 self.lookahead_distance = self.min_lookahead_distance
@@ -201,7 +205,7 @@ class PurePursuit(object):
         f_x = interpolate.interp1d(t, x)
         f_y = interpolate.interp1d(t, y)
 
-        new_t = np.arange(0, len(self.trajectory.points)-1, 0.5)
+        new_t = np.arange(0, len(self.trajectory.points)-1, 0.1)
         self.trajectory.points = [(new_x, new_y) for (new_x, new_y) in zip(f_x(new_t), f_y(new_t))]
 
         self.drive_cmd.drive.speed = self.speed
@@ -225,8 +229,13 @@ class PurePursuit(object):
             self.car_theta = theta
             self.car_point = (x, y)
             di, target_ind = self.pure_pursuit_steer_control()
-            self.odom_lock = True
-
+            rospy.loginfo(target_ind)
+            if target_ind >= len(self.trajectory.points)-1:
+                self.drive_cmd.drive.speed = 0
+                self.odom_lock = True
+            else:
+                self.drive_cmd.drive.steering_angle = di
+            self.drive_pub.publish(self.drive_cmd)
 
 
 if __name__ == "__main__":
