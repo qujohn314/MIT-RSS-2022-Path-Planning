@@ -105,6 +105,7 @@ class PathPlan(object):
         self.rot_matrix = r.as_dcm()
         self.translation = np.array([msg.info.origin.position.x, msg.info.origin.position.y, msg.info.origin.position.z])
         self.map_acquired = True
+        
     def convert_xy_to_uv(self, x_y_coord):
         x = x_y_coord[0]
         y = x_y_coord[1]
@@ -141,10 +142,11 @@ class PathPlan(object):
 
     def odom_cb(self, msg):
         # pass ## REMOVE AND FILL IN ##
-        if not self.map_acquired:
+        if not self.map_acquired or self.start is not None:
             return
-        x = msg.twist.twist.linear.x
-        y = msg.twist.twist.linear.y
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        orientation = msg.pose.pose.orientation
         # theta = msg.twist.twist.angular.z
         self.start = self.convert_xy_to_uv((x,y))
     
@@ -245,7 +247,6 @@ class PathPlan(object):
         came_from[start_point] = None
         cost_so_far[start_point] = 0
         # Create start and end node
-        rospy.loginfo(grid[start_point[1]][start_point[0]])
         open_list.put((0, start_point))
         # Loop until you find the end
         while not open_list.empty():
@@ -283,7 +284,7 @@ class PathPlan(object):
                 path.append(came_from[current])
                 current = came_from[current]
             final_path = path[::-1] # Return reversed path
-            rospy.loginfo(final_path)
+           # rospy.loginfo(final_path)
         else:
             rospy.loginfo("goal not found")
 
