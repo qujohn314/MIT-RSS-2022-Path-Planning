@@ -180,9 +180,9 @@ class PathPlan(object):
             return
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
-        #self.start = self.convert_xy_to_uv((x,y))
-        #self.x_points = []
-        #self.y_points = []
+        self.start = self.convert_xy_to_uv((x,y))
+        self.x_points = []
+        self.y_points = []
 
         start_point_marker = Marker()
         start_point_marker.header.frame_id = '/map'
@@ -204,8 +204,8 @@ class PathPlan(object):
         start_point_marker.color.b = 0.0
 
 
-        #self.new_path_to_create = True
-        #self.start_point.publish(start_point_marker)
+        self.new_path_to_create = True
+        self.start_point.publish(start_point_marker)
 
     def goal_cb(self, msg):
         # pass ## REMOVE AND FILL IN ##
@@ -244,6 +244,13 @@ class PathPlan(object):
 
     def heuristic(self, a, b):
         return (b[0]-a[0])**2 + (b[1]-a[1])**2
+        '''
+        dx = abs(a[0] - b[0])
+        dy = abs(a[1] - b[1])
+        D2 = 2**0.5
+
+        h = (dx+dy) + (D2 - 2)*min(dx,dy)
+        return h '''
 
     def generate_neighbors(self, node):
         north = (0,1)
@@ -254,7 +261,16 @@ class PathPlan(object):
         southwest = (-1,-1)
         west = (-1,0)
         northwest = (-1,1)
-        directions = [north, northeast, east, southeast, south, southwest, west, northwest]
+
+        norther = (-1,2)
+        northeaster = (1,2)
+        easter = (2,1)
+        southeaster = (2,-1)
+        souther = (1,-2)
+        southwester = (-1,-2)
+        wester = (-2,-1)
+        northwester = (-2,1)
+        directions = [north, northeast, east, southeast, south, southwest, west, northwest,norther, northeaster, easter, southeaster, souther, southwester, wester, northwester ]
         
         neighbors = []
         for direction in directions:
@@ -283,17 +299,19 @@ class PathPlan(object):
             
             neighbors = self.generate_neighbors(current)
             for neighbor in neighbors: # Adjacent squares
-                # obstacle in the way
-                if grid[neighbor[1]][neighbor[0]] >= 0.196:
-                    continue
+                
                 # out of bounds
                 if neighbor[0] > (len(grid[0]) - 1) or neighbor[0] < 0 or neighbor[1] > (len(grid)-1) or neighbor[1] < 0:
                     rospy.loginfo("out of bounds detected :(")
                     rospy.loginfo("uv coord:" + str((neighbor[0],neighbor[1])))
                     continue
+
+                # obstacle in the way
+                if grid[neighbor[1]][neighbor[0]] > 20 or grid[neighbor[1]][neighbor[0]] == -1:
+                    continue
                 
                 # Increase the cost by one
-                new_cost = cost_so_far[current] + 1
+                new_cost = cost_so_far[current] + (current[0]-neighbor[0])**2 + (current[1]-neighbor[1])**2
                 
                 if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
                     cost_so_far[neighbor] = new_cost
