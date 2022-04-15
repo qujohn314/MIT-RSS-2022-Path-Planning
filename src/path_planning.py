@@ -142,7 +142,7 @@ class PathPlan(object):
 
     def odom_cb(self, msg):
         # pass ## REMOVE AND FILL IN ##
-        if not self.map_acquired or self.start is not None:
+        if not self.map_acquired or (self.start is not None and self.end is not None):
             return
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y

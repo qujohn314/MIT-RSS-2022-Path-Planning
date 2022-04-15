@@ -34,12 +34,11 @@ class PurePursuit(object):
     def __init__(self):
         # self.odom_topic = rospy.get_param("~odom_topic")  # TODO: This is throwing an error for some reason
         self.odom_topic = "/pf/pose/odom"
-
+        self.speed = 2.0  # TODO: Any changes needed? Do we need to get speed as parameter?
         self.k = 0.1 # look forward gain
-        self.default_lookahead_distance = 2.0
+        self.default_lookahead_distance = 2.0 * 1.2**(self.speed-1)
         self.min_lookahead_distance = 0.35
         self.lookahead_distance = 2.0   # lookahead distance currently being used; scaled in pure_pursuit() based on curvature of trajectory
-        self.speed = 4.0  # TODO: Any changes needed? Do we need to get speed as parameter?
         self.wheelbase_length = 0.8  #TODO is this okay?
         self.Kp = 1.0  # speed proportional gain
         self.trajectory = utils.LineTrajectory("/followed_trajectory")
@@ -54,6 +53,7 @@ class PurePursuit(object):
 
         self.odom_lock = False
         self.old_nearest_point_index = None
+
 
     def pure_pursuit_steer_control(self):
         ind, Lf = self.get_target_index()
@@ -211,13 +211,10 @@ class PurePursuit(object):
         new_t = np.arange(0, len(self.trajectory.points)-1, 0.1)
         self.trajectory.points = [(new_x, new_y) for (new_x, new_y) in zip(f_x(new_t), f_y(new_t))]
 
-        self.drive_cmd.drive.speed = self.speed
         self.old_nearest_point_index = None
         self.odom_lock = False
 
         self.old_nearest_point_index = None
-        self.drive_cmd.drive.speed = self.speed
-        self.drive_pub.publish(self.drive_cmd)
 
 
     def odom_callback(self, msg):
@@ -237,10 +234,11 @@ class PurePursuit(object):
             self.car_point = (x, y)
             di, target_ind = self.pure_pursuit_steer_control()
             rospy.loginfo(target_ind)
-            if target_ind >= len(self.trajectory.points)-1:
+            if target_ind > len(self.trajectory.points)-1 and len(self.trajectory.points) != 0:
                 self.drive_cmd.drive.speed = 0
                 self.odom_lock = True
             else:
+                self.drive_cmd.drive.speed = self.speed
                 self.drive_cmd.drive.steering_angle = di
             self.drive_pub.publish(self.drive_cmd)
 
