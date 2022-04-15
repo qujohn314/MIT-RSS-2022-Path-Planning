@@ -92,10 +92,19 @@ class PathPlan(object):
     def map_cb(self, msg):
         self.create_rot_matrix(msg)
         self.resolution = msg.info.resolution
-    
-        data = np.reshape(msg.data, (msg.info.height, msg.info.width))
-        footprint = disk(7) 
-        new_image = erosion(data, footprint) #erode map
+
+        data = msg.data
+        data = np.reshape(np.asarray(data), (msg.info.height, msg.info.width))
+        # rospy.loginfo(data)
+        data[data == -1] = 21
+        data[data < 20] = 0
+        data[data > 20] = 1
+
+        # idx = np.where(0 <= data < 20)
+        # data = data[idx]
+
+        footprint = disk(7)
+        new_image = dilation(data, footprint) #erode map
 
         self.grid = new_image
         self.map_acquired = True
@@ -249,21 +258,21 @@ class PathPlan(object):
 
 
     def heuristic(self, a, b):
-        return (b[0]-a[0])**2 + (b[1]-a[1])**2*0
-        '''
-        dx = abs(a[0] - b[0])
-        dy = abs(a[1] - b[1])
-        D2 = 2**0.5
-
-        h = (dx+dy) + (D2 - 2)*min(dx,dy)
-        return h '''
+        return ((b[0]-a[0])**2 + (b[1]-a[1])**2)**(0.5)
+        # '''
+        # dx = abs(a[0] - b[0])
+        # dy = abs(a[1] - b[1])
+        # D2 = 2**0.5
+        #
+        # h = (dx+dy) + (D2 - 2)*min(dx,dy)
+        # return h '''
 
     def generate_neighbors(self, node):
-        north = (0,1)
-        northeast = (1,1)
-        east = (1,0)
-        southeast = (1,-1)
-        south = (0,-1)
+        north = (0, 1)
+        northeast = (1, 1)
+        east = (1, 0)
+        southeast = (1, -1)
+        south = (0, -1)
         southwest = (-1,-1)
         west = (-1,0)
         northwest = (-1,1)
@@ -308,8 +317,8 @@ class PathPlan(object):
                 
                 # out of bounds
                 if neighbor[0] > (len(grid[0]) - 1) or neighbor[0] < 0 or neighbor[1] > (len(grid)-1) or neighbor[1] < 0:
-                    rospy.loginfo("out of bounds detected :(")
-                    rospy.loginfo("uv coord:" + str((neighbor[0],neighbor[1])))
+                    # rospy.loginfo("out of bounds detected :(")
+                    # rospy.loginfo("uv coord:" + str((neighbor[0],neighbor[1])))
                     continue
 
                 # obstacle in the way
@@ -317,7 +326,7 @@ class PathPlan(object):
                     continue
                 
                 # Increase the cost by one
-                new_cost = cost_so_far[current] + (current[0]-neighbor[0])**2 + (current[1]-neighbor[1])**2
+                new_cost = cost_so_far[current] + ((current[0]-neighbor[0])**2 + (current[1]-neighbor[1])**2)**(0.5)
                 
                 if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
                     cost_so_far[neighbor] = new_cost
@@ -356,7 +365,7 @@ class PathPlan(object):
 
             delta_x = next_x - x
             delta_y = next_y - y
-            vector1 = (delta_x,delta_y)
+            vector1 = (delta_x, delta_y)
 
             pose = Pose()
             pose.position.x = x
