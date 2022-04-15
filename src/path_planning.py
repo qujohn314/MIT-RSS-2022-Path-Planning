@@ -45,6 +45,7 @@ class VisualizationTools:
         line_strip.color.g = color[1]
         line_strip.color.b = color[2]
         
+        rospy.loginfo(x)
         # Fill the line with the desired values
         for xi, yi in zip(x, y):
             p = Point()
@@ -67,9 +68,13 @@ class PathPlan(object):
         self.end = None
         self.grid = None
         self.resolution = None
+        self.x_points = []
+        self.y_points = []
 
         self.odom_topic = rospy.get_param("~odom_topic")
         self.initial_pose = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped, self.initial_pose_cb)
+        self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_cb)
+
         self.map_sub = rospy.Subscriber("/map", OccupancyGrid, self.map_cb)
         self.trajectory = LineTrajectory("/planned_trajectory")
         self.start_point = rospy.Publisher("/planned_trajectory/start_point", Marker, queue_size=10)
@@ -77,7 +82,7 @@ class PathPlan(object):
         self.path = rospy.Publisher("/planned_trajectory/path", Marker, queue_size=1)
         self.goal_sub = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_cb, queue_size=10)
         self.traj_pub = rospy.Publisher("/trajectory/current", PoseArray, queue_size=10)
-        self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_cb)
+        
 
         self.new_path_to_create = True
 
@@ -181,6 +186,8 @@ class PathPlan(object):
         x = msg.pose.position.x
         y = msg.pose.position.y
         # theta = msg.twist.twist.angular.z
+        if self.end is not None and self.start is not None:
+            self.start = self.end
         self.end = self.convert_xy_to_uv((x,y))
 
         end_point_marker = Marker()
@@ -218,7 +225,7 @@ class PathPlan(object):
         south = (0,-1)
         southwest = (-1,-1)
         west = (-1,0)
-        northwest = (-1,0)
+        northwest = (-1,1)
         directions = [north, northeast, east, southeast, south, southwest, west, northwest]
         
         neighbors = []
@@ -327,7 +334,10 @@ class PathPlan(object):
 
 
         visualize = VisualizationTools()
-        visualize.plot_line(map_x, map_y, [0,1,0], self.path, frame='/map')
+        self.x_points = self.x_points + map_x
+        self.y_points = self.y_points + map_y
+        rospy.loginfo("points")
+        visualize.plot_line(self.x_points, self.y_points, [0,1,0], self.path, frame='/map')
 
 if __name__=="__main__":
     rospy.init_node("path_planning")
