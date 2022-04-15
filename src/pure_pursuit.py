@@ -37,9 +37,9 @@ class PurePursuit(object):
 
         self.k = 0.1 # look forward gain
         self.default_lookahead_distance = 2.0
-        self.min_lookahead_distance = 0.3
+        self.min_lookahead_distance = 0.35
         self.lookahead_distance = 2.0   # lookahead distance currently being used; scaled in pure_pursuit() based on curvature of trajectory
-        self.speed = 1.5  # TODO: Any changes needed? Do we need to get speed as parameter?
+        self.speed = 4.0  # TODO: Any changes needed? Do we need to get speed as parameter?
         self.wheelbase_length = 0.8  #TODO is this okay?
         self.Kp = 1.0  # speed proportional gain
         self.trajectory = utils.LineTrajectory("/followed_trajectory")
@@ -95,7 +95,7 @@ class PurePursuit(object):
 
             while ind + 1 < len(self.trajectory.points):
                 distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
-                if self.in_front_of_car(ind) and distance_this_index < distance_next_index:
+                if distance_this_index < distance_next_index:
                     break
                 ind = ind + 1 if (ind + 1) < len(self.trajectory.points) else ind
                 distance_this_index = distance_next_index
@@ -106,6 +106,15 @@ class PurePursuit(object):
 
         # search look ahead target point index
         while Lf > self.calc_distance_from_car(self.trajectory.points[ind]):
+            try:
+                distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
+            except:
+                distance = self.calc_distance_from_car(self.trajectory.points[ind])
+                time.sleep(distance / self.speed * 2)
+                self.drive_cmd.drive.speed = 0
+                self.drive_pub.publish(self.drive_cmd)
+                print("Reached end of trajectory!")
+
             if (ind + 1) >= len(self.trajectory.points)-1:
                 break  # not exceed goal
             ind += 1
@@ -113,10 +122,9 @@ class PurePursuit(object):
         # get distance of current line segment so we can scale lookahead distance by it
 
         # if 0 < ind < len(self.trajectory.points):
-        rospy.loginfo("LPOJITYURSDFXGUIJKOJTYUFRDYFGIJOPKJITYUFDR")
         # rospy.loginfo(len(self.trajectory.points))
         self.trajectory.update_distances()
-        if ind == 1:
+        if ind <= 1:
             dist = self.trajectory.distance_along_trajectory(ind)
 
         else:
@@ -139,14 +147,14 @@ class PurePursuit(object):
         dy = self.car_point[1] - pt[1]
         return math.hypot(dx, dy)
 
-    def in_front_of_car(self, ind):
-        theta = np.arctan2(ind[1] - self.car_point[1], ind[0] - self.car_point[0]) - self.car_theta
-        if theta > np.pi:
-            theta = -2.0 * np.pi + theta
-        elif theta < -np.pi:
-            theta = 2.0 * np.pi + theta
-
-        return theta > -np.pi/2.0 or theta < np.pi/2.0
+    # def in_front_of_car(self, ind):
+    #     theta = np.arctan2(ind[1] - self.car_point[1], ind[0] - self.car_point[0]) - self.car_theta
+    #     if theta > np.pi:
+    #         theta = -2.0 * np.pi + theta
+    #     elif theta < -np.pi:
+    #         theta = 2.0 * np.pi + theta
+    #
+    #     return theta > -np.pi/2.0 or theta < np.pi/2.0
 
 
     def curvature(self, ind1, ind2, ind3):
@@ -217,13 +225,8 @@ class PurePursuit(object):
             self.car_theta = theta
             self.car_point = (x, y)
             di, target_ind = self.pure_pursuit_steer_control()
-            rospy.loginfo(target_ind)
-            if target_ind >= len(self.trajectory.points)-1:
-                self.drive_cmd.drive.speed = 0
-                self.odom_lock = True
-            else:
-                self.drive_cmd.drive.steering_angle = di
-            self.drive_pub.publish(self.drive_cmd)
+            self.odom_lock = True
+
 
 
 if __name__ == "__main__":
