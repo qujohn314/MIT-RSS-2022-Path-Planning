@@ -33,7 +33,7 @@ class PurePursuit(object):
     """
     def __init__(self):
         # self.odom_topic = rospy.get_param("~odom_topic")  # TODO: This is throwing an error for some reason
-        self.odom_topic = "/odom"
+        self.odom_topic = "/pf/pose/odom"
 
         self.k = 0.1 # look forward gain
         self.default_lookahead_distance = 2.0
@@ -90,17 +90,19 @@ class PurePursuit(object):
             if ind >= len(self.trajectory.points):
                 return
             distance_this_index = self.calc_distance_from_car(self.trajectory.points[ind])
-            print("IND: ", ind)
+            rospy.loginfo("IND: " + str(ind))
+            rospy.loginfo(len(self.trajectory.points))
 
             while True:
-                try:
+               
+                if ind + 1 <= len(self.trajectory.points) -1:
                     distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
-                except:
-                    distance = self.calc_distance_from_car(self.trajectory.points[ind])
+                else:
+                    distance = self.calc_distance_from_car(self.trajectory.points[-1])
                     time.sleep(distance / self.speed * 2)
                     self.drive_cmd.drive.speed = 0
                     self.drive_pub.publish(self.drive_cmd)
-                    print("Reached end of trajectory!")
+                    #print("Reached end of trajectory!")
 
                 if distance_this_index < distance_next_index:
                         break
@@ -125,7 +127,7 @@ class PurePursuit(object):
         # rospy.loginfo(len(self.trajectory.points))
         self.trajectory.update_distances()
 
-        if ind == 1:
+        if ind == 1 or ind == 0:
             dist = self.trajectory.distance_along_trajectory(ind)
 
         else:
@@ -191,6 +193,7 @@ class PurePursuit(object):
         self.trajectory.clear()
         self.trajectory.fromPoseArray(msg)
         self.trajectory.publish_viz(duration=0.0)
+        rospy.loginfo("Trajectory callback")
 
         def multiInterp2(x, xp, fp):
             i = np.arange(x.size)
@@ -212,9 +215,13 @@ class PurePursuit(object):
         self.old_nearest_point_index = None
         self.odom_lock = False
 
+        self.old_nearest_point_index = None
+        self.drive_cmd.drive.speed = self.speed
+        self.drive_pub.publish(self.drive_cmd)
 
 
     def odom_callback(self, msg):
+        rospy.loginfo("odom callback called")
         if not self.odom_lock:
             # rospy.loginfo("ODOM CALLBACK -------------------")
             x = msg.pose.pose.position.x
@@ -225,7 +232,7 @@ class PurePursuit(object):
             quat = msg.pose.pose.orientation
             orientation = tf.transformations.euler_from_quaternion(np.array([quat.x, quat.y, quat.z, quat.w]))
             theta = orientation[2]
-
+            rospy.loginfo("odom callback unlocked")
             self.car_theta = theta
             self.car_point = (x, y)
             di, target_ind = self.pure_pursuit_steer_control()

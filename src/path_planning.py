@@ -149,13 +149,6 @@ class PathPlan(object):
         orientation = msg.pose.pose.orientation
         # theta = msg.twist.twist.angular.z
         self.start = self.convert_xy_to_uv((x,y))
-    
-    def initial_pose_cb(self, msg):
-        if not self.map_acquired:
-            return
-        x = msg.pose.pose.position.x
-        y = msg.pose.pose.position.y
-        self.start = self.convert_xy_to_uv((x,y))
         self.x_points = []
         self.y_points = []
 
@@ -181,6 +174,38 @@ class PathPlan(object):
 
         self.new_path_to_create = True
         self.start_point.publish(start_point_marker)
+    
+    def initial_pose_cb(self, msg):
+        if not self.map_acquired:
+            return
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        #self.start = self.convert_xy_to_uv((x,y))
+        #self.x_points = []
+        #self.y_points = []
+
+        start_point_marker = Marker()
+        start_point_marker.header.frame_id = '/map'
+        start_point_marker.type = start_point_marker.SPHERE
+        start_point_marker.action = start_point_marker.ADD
+        start_point_marker.scale.x = 0.4
+        start_point_marker.scale.y = 0.4
+        start_point_marker.scale.z = 0.4
+        
+        start_point_marker.pose.position.x = x
+        start_point_marker.pose.position.y = y
+        start_point_marker.pose.position.z = 0
+
+        start_point_marker.pose.orientation = Quaternion(0,0,0,1)
+
+        start_point_marker.color.a = 0.5
+        start_point_marker.color.r = 0.0
+        start_point_marker.color.g = 1.0
+        start_point_marker.color.b = 0.0
+
+
+        #self.new_path_to_create = True
+        #self.start_point.publish(start_point_marker)
 
     def goal_cb(self, msg):
         # pass ## REMOVE AND FILL IN ##
