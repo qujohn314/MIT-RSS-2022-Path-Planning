@@ -33,7 +33,7 @@ class PurePursuit(object):
     """
     def __init__(self):
         # self.odom_topic = rospy.get_param("~odom_topic")  # TODO: This is throwing an error for some reason
-        self.odom_topic = "/odom"
+        self.odom_topic = "/pf/pose/odom"
 
         self.k = 0.1 # look forward gain
         self.default_lookahead_distance = 2.0
