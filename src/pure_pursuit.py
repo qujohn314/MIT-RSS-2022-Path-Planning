@@ -14,6 +14,7 @@ from geometry_msgs.msg import PoseArray, PoseStamped
 from visualization_msgs.msg import Marker
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Float32
 
 from scipy import interpolate
 
@@ -27,7 +28,7 @@ dt = 0.1  # [s] time tick
 WB = 2.9  # [m] wheel base of vehicle
 
 class PurePursuit(object):
-    """ 
+    """
     Implements Pure Pursuit trajectory tracking with a fixed lookahead and speed.
     """
     def __init__(self):
@@ -35,37 +36,43 @@ class PurePursuit(object):
         self.odom_topic = "/odom"
 
         self.k = 0.1 # look forward gain
+        self.default_lookahead_distance = 2.0
+        self.min_lookahead_distance = 0.3
         self.lookahead_distance = 2.0   # lookahead distance currently being used; scaled in pure_pursuit() based on curvature of trajectory
         self.speed = 1.5  # TODO: Any changes needed? Do we need to get speed as parameter?
-        self.wheelbase_length = 0.8  #TODO is this okay? 
+        self.wheelbase_length = 0.8  #TODO is this okay?
         self.Kp = 1.0  # speed proportional gain
-
-
         self.trajectory = utils.LineTrajectory("/followed_trajectory")
+
         self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_callback, queue_size=1)
         self.traj_sub = rospy.Subscriber("/trajectory/current", PoseArray, self.trajectory_callback, queue_size=1)
         self.drive_pub = rospy.Publisher("/drive", AckermannDriveStamped, queue_size=1)
         self.drive_cmd = AckermannDriveStamped()
         self.drive_cmd.drive.speed = self.speed  # TODO: do we need to subscribe to this? Or can we pick speed?
+        self.point_X_pub = rospy.Publisher("/point_X", Float32, queue_size=1)
+        self.point_Y_pub = rospy.Publisher("/point_y", Float32, queue_size=1)
 
         self.odom_lock = False
         self.old_nearest_point_index = None
 
     def pure_pursuit_steer_control(self):
         ind, Lf = self.get_target_index()
-        
+
         if ind < len(self.trajectory.points):
             tx, ty = self.trajectory.points[ind]
         else:  # toward goal
             tx, ty = self.trajectory.points[-1]
             ind = len(trajectory.cx) - 1
 
+        self.point_X_pub.publish(tx)
+        self.point_Y_pub.publish(ty)
+
         alpha = math.atan2(ty - self.car_point[1], tx - self.car_point[0]) - self.car_theta
 
         delta = math.atan2(2.0 * self.wheelbase_length * math.sin(alpha) / Lf, 1.0)
 
         return delta, ind
-    
+
     def get_target_index(self):
         # To speed up nearest point search, doing it at only first time.
         while len(self.trajectory.points) == 0:
@@ -88,7 +95,7 @@ class PurePursuit(object):
 
             while ind + 1 < len(self.trajectory.points):
                 distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
-                if distance_this_index < distance_next_index:
+                if self.in_front_of_car(ind) and distance_this_index < distance_next_index:
                     break
                 ind = ind + 1 if (ind + 1) < len(self.trajectory.points) else ind
                 distance_this_index = distance_next_index
@@ -103,12 +110,44 @@ class PurePursuit(object):
                 break  # not exceed goal
             ind += 1
 
+        # get distance of current line segment so we can scale lookahead distance by it
+
+        # if 0 < ind < len(self.trajectory.points):
+        rospy.loginfo("LPOJITYURSDFXGUIJKOJTYUFRDYFGIJOPKJITYUFDR")
+        # rospy.loginfo(len(self.trajectory.points))
+        self.trajectory.update_distances()
+        if ind == 1:
+            dist = self.trajectory.distance_along_trajectory(ind)
+
+        else:
+            dist1 = self.trajectory.distance_along_trajectory(ind)
+            dist2 = self.trajectory.distance_along_trajectory(ind-1)
+            dist = dist1 - dist2
+
+        if dist < self.default_lookahead_distance:
+            self.lookahead_distance = dist / self.default_lookahead_distance * self.k * self.speed
+            if self.lookahead_distance < self.min_lookahead_distance:
+                self.lookahead_distance = self.min_lookahead_distance
+        else:
+            self.lookahead_distance = self.default_lookahead_distance
+
+        rospy.loginfo(self.lookahead_distance)
         return ind, Lf
-    
+
     def calc_distance_from_car(self, pt):
         dx = self.car_point[0] - pt[0]
         dy = self.car_point[1] - pt[1]
         return math.hypot(dx, dy)
+
+    def in_front_of_car(self, ind):
+        theta = np.arctan2(ind[1] - self.car_point[1], ind[0] - self.car_point[0]) - self.car_theta
+        if theta > np.pi:
+            theta = -2.0 * np.pi + theta
+        elif theta < -np.pi:
+            theta = 2.0 * np.pi + theta
+
+        return theta > -np.pi/2.0 or theta < np.pi/2.0
+
 
     def curvature(self, ind1, ind2, ind3):
         """
@@ -121,7 +160,7 @@ class PurePursuit(object):
         y1 = pt1[1]
         y2 = pt2[1]
         y3 = pt3[1]
-        
+
         ab = ((x1 - x2)**2 + (y1 - y2)**2)**(1/2)
         ac = ((x1 - x3)**2 + (y1 - y3)**2)**(1/2)
         bc = ((x2 - x3)**2 + (y2 - y3)**2)**(1/2)
@@ -154,13 +193,13 @@ class PurePursuit(object):
         f_x = interpolate.interp1d(t, x)
         f_y = interpolate.interp1d(t, y)
 
-        new_t = np.arange(0, len(self.trajectory.points)-1, 0.1)
+        new_t = np.arange(0, len(self.trajectory.points)-1, 0.5)
         self.trajectory.points = [(new_x, new_y) for (new_x, new_y) in zip(f_x(new_t), f_y(new_t))]
 
         self.drive_cmd.drive.speed = self.speed
         self.old_nearest_point_index = None
         self.odom_lock = False
-       
+
 
 
     def odom_callback(self, msg):
