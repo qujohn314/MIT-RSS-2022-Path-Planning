@@ -15,6 +15,9 @@ from visualization_msgs.msg import Marker
 from tf.transformations import quaternion_from_matrix
 import tf.transformations
 from scipy.spatial.transform import Rotation as R
+from skimage.morphology import disk
+from skimage.morphology import dilation
+from skimage.morphology import erosion
 
 class VisualizationTools:
 
@@ -91,7 +94,10 @@ class PathPlan(object):
         self.resolution = msg.info.resolution
     
         data = np.reshape(msg.data, (msg.info.height, msg.info.width))
-        self.grid = data
+        footprint = disk(7) 
+        new_image = erosion(data, footprint) #erode map
+
+        self.grid = new_image
         self.map_acquired = True
 
     def create_rot_matrix(self, msg):
