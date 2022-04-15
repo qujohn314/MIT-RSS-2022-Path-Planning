@@ -243,7 +243,7 @@ class PathPlan(object):
 
 
     def heuristic(self, a, b):
-        return (b[0]-a[0])**2 + (b[1]-a[1])**2
+        return (b[0]-a[0])**2 + (b[1]-a[1])**2*0
         '''
         dx = abs(a[0] - b[0])
         dy = abs(a[1] - b[1])
@@ -307,7 +307,7 @@ class PathPlan(object):
                     continue
 
                 # obstacle in the way
-                if grid[neighbor[1]][neighbor[0]] > 20 or grid[neighbor[1]][neighbor[0]] == -1:
+                if grid[neighbor[1]][neighbor[0]] > 0 or grid[neighbor[1]][neighbor[0]] == -1:
                     continue
                 
                 # Increase the cost by one
