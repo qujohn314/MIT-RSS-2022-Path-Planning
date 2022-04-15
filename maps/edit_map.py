@@ -21,12 +21,12 @@ def main():
         print("Error, need an input file.")
         sys.exit(1)
     
-    footprint = disk(10)
+    footprint = disk(5)
     image = np.array(Image.open(input_file))
     image = np.mean(image, axis=2)
     new_image = erosion(image, footprint)
 
-    output_filename = "eroded_map.jpeg"
+    output_filename = "eroded_stata_basement.png"
     im = Image.fromarray(new_image).convert('RGB')
     im.save(output_filename)
     sys.exit(0)
