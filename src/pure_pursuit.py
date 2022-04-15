@@ -37,9 +37,9 @@ class PurePursuit(object):
 
         self.k = 0.1 # look forward gain
         self.default_lookahead_distance = 2.0
-        self.min_lookahead_distance = 0.3
+        self.min_lookahead_distance = 0.35
         self.lookahead_distance = 2.0   # lookahead distance currently being used; scaled in pure_pursuit() based on curvature of trajectory
-        self.speed = 1.5  # TODO: Any changes needed? Do we need to get speed as parameter?
+        self.speed = 4.0  # TODO: Any changes needed? Do we need to get speed as parameter?
         self.wheelbase_length = 0.8  #TODO is this okay?
         self.Kp = 1.0  # speed proportional gain
         self.trajectory = utils.LineTrajectory("/followed_trajectory")
@@ -62,7 +62,6 @@ class PurePursuit(object):
             tx, ty = self.trajectory.points[ind]
         else:  # toward goal
             tx, ty = self.trajectory.points[-1]
-            ind = len(trajectory.cx) - 1
 
         self.point_X_pub.publish(tx)
         self.point_Y_pub.publish(ty)
@@ -93,10 +92,19 @@ class PurePursuit(object):
             distance_this_index = self.calc_distance_from_car(self.trajectory.points[ind])
             print("IND: ", ind)
 
-            while ind + 1 < len(self.trajectory.points):
-                distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
-                if self.in_front_of_car(ind) and distance_this_index < distance_next_index:
-                    break
+            while True:
+                try:
+                    distance_next_index = self.calc_distance_from_car(self.trajectory.points[ind + 1])
+                except:
+                    distance = self.calc_distance_from_car(self.trajectory.points[ind])
+                    time.sleep(distance / self.speed * 2)
+                    self.drive_cmd.drive.speed = 0
+                    self.drive_pub.publish(self.drive_cmd)
+                    print("Reached end of trajectory!")
+
+                if distance_this_index < distance_next_index:
+                        break
+
                 ind = ind + 1 if (ind + 1) < len(self.trajectory.points) else ind
                 distance_this_index = distance_next_index
             self.old_nearest_point_index = ind
@@ -113,9 +121,10 @@ class PurePursuit(object):
         # get distance of current line segment so we can scale lookahead distance by it
 
         # if 0 < ind < len(self.trajectory.points):
-        rospy.loginfo("LPOJITYURSDFXGUIJKOJTYUFRDYFGIJOPKJITYUFDR")
+        # rospy.loginfo("LPOJITYURSDFXGUIJKOJTYUFRDYFGIJOPKJITYUFDR")
         # rospy.loginfo(len(self.trajectory.points))
         self.trajectory.update_distances()
+
         if ind == 1:
             dist = self.trajectory.distance_along_trajectory(ind)
 
@@ -124,7 +133,10 @@ class PurePursuit(object):
             dist2 = self.trajectory.distance_along_trajectory(ind-1)
             dist = dist1 - dist2
 
-        if dist < self.default_lookahead_distance:
+        if ind == 0:
+            self.lookahead_distance = self.default_lookahead_distance
+
+        elif dist < self.default_lookahead_distance:
             self.lookahead_distance = dist / self.default_lookahead_distance * self.k * self.speed
             if self.lookahead_distance < self.min_lookahead_distance:
                 self.lookahead_distance = self.min_lookahead_distance
@@ -139,14 +151,14 @@ class PurePursuit(object):
         dy = self.car_point[1] - pt[1]
         return math.hypot(dx, dy)
 
-    def in_front_of_car(self, ind):
-        theta = np.arctan2(ind[1] - self.car_point[1], ind[0] - self.car_point[0]) - self.car_theta
-        if theta > np.pi:
-            theta = -2.0 * np.pi + theta
-        elif theta < -np.pi:
-            theta = 2.0 * np.pi + theta
-
-        return theta > -np.pi/2.0 or theta < np.pi/2.0
+    # def in_front_of_car(self, ind):
+    #     theta = np.arctan2(ind[1] - self.car_point[1], ind[0] - self.car_point[0]) - self.car_theta
+    #     if theta > np.pi:
+    #         theta = -2.0 * np.pi + theta
+    #     elif theta < -np.pi:
+    #         theta = 2.0 * np.pi + theta
+    #
+    #     return theta > -np.pi/2.0 or theta < np.pi/2.0
 
 
     def curvature(self, ind1, ind2, ind3):
@@ -193,7 +205,7 @@ class PurePursuit(object):
         f_x = interpolate.interp1d(t, x)
         f_y = interpolate.interp1d(t, y)
 
-        new_t = np.arange(0, len(self.trajectory.points)-1, 0.5)
+        new_t = np.arange(0, len(self.trajectory.points)-1, 0.1)
         self.trajectory.points = [(new_x, new_y) for (new_x, new_y) in zip(f_x(new_t), f_y(new_t))]
 
         self.drive_cmd.drive.speed = self.speed

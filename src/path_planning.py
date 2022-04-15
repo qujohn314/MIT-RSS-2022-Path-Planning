@@ -45,7 +45,6 @@ class VisualizationTools:
         line_strip.color.g = color[1]
         line_strip.color.b = color[2]
         
-        rospy.loginfo(x)
         # Fill the line with the desired values
         for xi, yi in zip(x, y):
             p = Point()
@@ -155,6 +154,8 @@ class PathPlan(object):
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
         self.start = self.convert_xy_to_uv((x,y))
+        self.x_points = []
+        self.y_points = []
 
         start_point_marker = Marker()
         start_point_marker.header.frame_id = '/map'
@@ -244,7 +245,7 @@ class PathPlan(object):
         came_from[start_point] = None
         cost_so_far[start_point] = 0
         # Create start and end node
-
+        rospy.loginfo(grid[start_point[1]][start_point[0]])
         open_list.put((0, start_point))
         # Loop until you find the end
         while not open_list.empty():
@@ -257,10 +258,12 @@ class PathPlan(object):
             neighbors = self.generate_neighbors(current)
             for neighbor in neighbors: # Adjacent squares
                 # obstacle in the way
-                if grid[neighbor[1]][neighbor[0]] != 0:
+                if grid[neighbor[1]][neighbor[0]] >= 0.196:
                     continue
                 # out of bounds
-                if neighbor[0] > (len(grid) - 1) or neighbor[0] < 0 or neighbor[1] > (len(grid[0])-1) or neighbor[1] < 0:
+                if neighbor[0] > (len(grid[0]) - 1) or neighbor[0] < 0 or neighbor[1] > (len(grid)-1) or neighbor[1] < 0:
+                    rospy.loginfo("out of bounds detected :(")
+                    rospy.loginfo("uv coord:" + str((neighbor[0],neighbor[1])))
                     continue
                 
                 # Increase the cost by one
@@ -334,7 +337,7 @@ class PathPlan(object):
 
 
         visualize = VisualizationTools()
-        self.x_points = self.x_points + map_x
+        self.x_points = self.x_points + map_x 
         self.y_points = self.y_points + map_y
         rospy.loginfo("points")
         visualize.plot_line(self.x_points, self.y_points, [0,1,0], self.path, frame='/map')
