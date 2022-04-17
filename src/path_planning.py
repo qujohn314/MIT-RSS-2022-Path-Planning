@@ -73,8 +73,8 @@ class PathPlan(object):
         self.x_points = []
         self.y_points = []
 
-        # self.odom_topic = rospy.get_param("~odom_topic")l
-        self.odom_topic = "/odom"
+        self.odom_topic = rospy.get_param("~odom_topic")
+        # self.odom_topic = "/odom"
         self.initial_pose = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped, self.initial_pose_cb)
         self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_cb)
 
